@@ -1,0 +1,12 @@
+fastapi
+uvicorn
+networkx
+matplotlib
+seaborn
+pandas
+dask
+plotly
+pyvis
+jinja2
+numpy
+python-multipart
