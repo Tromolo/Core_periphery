@@ -148,15 +148,20 @@ def plot_clustering_coefficient_distribution(G: nx.Graph, suffix:str):
     ccs = list(nx.clustering(G).values())
     if not ccs:
         return
+
+    unique_id = uuid.uuid4().hex
+    outpath = f"static/clustering_distribution{suffix}_{unique_id}.png"
+
     plt.figure(figsize=(10,6))
     plt.hist(ccs,bins=20,color="skyblue",edgecolor="black")
     plt.title(f"Clustering Distribution {suffix}")
     plt.xlabel("Clustering Coefficient")
     plt.ylabel("Frequency")
     plt.grid(True)
-    outpath= f"static/clustering_distribution{suffix}.png"
     plt.savefig(outpath)
     plt.close()
+
+    return outpath
 
 def compute_connected_components(G: nx.Graph):
     if G.number_of_nodes()==0:
@@ -175,6 +180,9 @@ def detect_communities(G: nx.Graph, suffix:str):
         for i, comm_set in enumerate(c):
             for nd in comm_set:
                 community_map[nd]=i
+
+        unique_id = uuid.uuid4().hex
+        outpath = f"static/community_detection{suffix}_{unique_id}.png"
         if G.number_of_nodes()>0:
             fig, ax = plt.subplots(figsize=(15,10))
             pos=nx.spring_layout(G)
@@ -194,15 +202,51 @@ def detect_communities(G: nx.Graph, suffix:str):
                                        norm=mpl.colors.Normalize(vmin=0,vmax=len(c)-1))
             sm.set_array([])
             fig.colorbar(sm, ax=ax, label="Community ID")
-            outpath= f"static/community_detection{suffix}.png"
             plt.savefig(outpath)
             plt.close()
-        return {"num_communities":len(c),"community_sizes":c_sizes}
+        return {
+            "num_communities": len(c),
+            "community_sizes": c_sizes,
+            "community_image_path": outpath
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error in community detection {suffix}: {e}")
 
+
+# Koeficient jadra a periferii podla Holme (2005)
+def compute_core_periphery_coefficient(G: nx.Graph, core_nodes: list, periphery_nodes: list):
+    if G.number_of_nodes() == 0:
+        return 0.0
+
+    core_set = set(core_nodes)
+    periphery_set = set(periphery_nodes)
+
+    ideal_edges = 0
+    actual_edges = 0
+
+    for node in core_nodes:
+        neighbors = set(G[node])
+        core_neighbors = neighbors & core_set
+        ideal_edges += len(core_nodes) - 1
+        actual_edges += len(core_neighbors)
+
+    for node in core_nodes:
+        neighbors = set(G[node])
+        periphery_neighbors = neighbors & periphery_set
+        ideal_edges += len(periphery_nodes)
+        actual_edges += len(periphery_neighbors)
+
+    for node in periphery_nodes:
+        neighbors = set(G[node])
+        periphery_neighbors = neighbors & periphery_set
+        actual_edges -= len(periphery_neighbors)
+
+    coefficient = actual_edges / ideal_edges if ideal_edges > 0 else 0.0
+    return coefficient
+
 def visualize_graph(G: nx.Graph, suffix:str, layout="spring", node_size_scale=10.0, node_alpha=1.0):
-    outimg=f"static/graph_improved{suffix}.png"
+    unique_id = uuid.uuid4().hex
+    outimg = f"static/graph_improved{suffix}_{unique_id}.png"
     try:
         if G.number_of_nodes()==0:
             plt.figure(figsize=(6,4))
@@ -234,6 +278,8 @@ def visualize_graph(G: nx.Graph, suffix:str, layout="spring", node_size_scale=10
 
         plt.savefig(outimg)
         print(f"Graph visualization saved to {outimg}")
+
+        return outimg
     except Exception as e:
         print(f"Error in visualize graph {suffix}: {e}")
     finally:
@@ -254,9 +300,10 @@ def analyze_graph(G: nx.Graph, degree_threshold=0, layout="spring", node_size_sc
     skip_expensive = (num_edges>LARGE_EDGE_THRESHOLD or num_nodes> LARGE_NODE_THRESHOLD)
     centrals= compute_centrality_measures(G,skip_expensive=skip_expensive)
 
-    plot_clustering_coefficient_distribution(G, suffix)
-    comm_data= detect_communities(G, suffix)
-    visualize_graph(G, suffix, layout, node_size_scale,node_alpha)
+    clustering_image_path = plot_clustering_coefficient_distribution(G, suffix)
+    comm_data = detect_communities(G, suffix)
+    visualize_path = visualize_graph(G, suffix, layout, node_size_scale, node_alpha)
+
     comps= compute_connected_components(G)
     core, periphery= detect_core_periphery_by_degree(G, degree_threshold)
 
@@ -275,10 +322,11 @@ def analyze_graph(G: nx.Graph, degree_threshold=0, layout="spring", node_size_sc
          "num_periphery_nodes": len(periphery),
          "core_nodes_sample": core[:10],
          "periphery_nodes_sample": periphery[:10],
+        "core_periphery_coefficient": compute_core_periphery_coefficient(G, core, periphery)
       },
-      "graph_image": f"/static/graph_improved{suffix}.png",
-      "clustering_image": f"/static/clustering_distribution{suffix}.png",
-      "community_image": f"/static/community_detection{suffix}.png"
+        "graph_image": visualize_path,
+        "clustering_image": clustering_image_path,
+        "community_image": comm_data.get("community_image_path")
     }
 
 
@@ -395,7 +443,8 @@ async def upload_file(
 async def heatmap_a():
     if global_graph_a is None:
         raise HTTPException(status_code=400, detail="Graph A not available.")
-    out_png= "static/adjacency_heatmap_A.png"
+    unique_id = uuid.uuid4().hex
+    out_png = f"static/adjacency_heatmap_A_{unique_id}.png"
     A= nx.to_numpy_array(global_graph_a, nodelist= sorted(global_graph_a.nodes()))
     if A.size==0:
         raise HTTPException(status_code=400, detail="Graph A empty.")
@@ -404,14 +453,19 @@ async def heatmap_a():
     ax.set_title("Heatmap A")
     plt.savefig(out_png,dpi=150,bbox_inches="tight")
     plt.close(fig)
-    return FileResponse(out_png,media_type="image/png",filename="adjacency_heatmap_A.png")
+    return FileResponse(
+        out_png,
+        media_type="image/png",
+        filename=f"adjacency_heatmap_A_{unique_id}.png"
+    )
 
 
 @app.get("/heatmap_b", response_class=FileResponse)
 async def heatmap_b():
     if global_graph_b is None:
         raise HTTPException(status_code=400, detail="Graph B not available.")
-    out_png= "static/adjacency_heatmap_B.png"
+    unique_id = uuid.uuid4().hex
+    out_png = f"static/adjacency_heatmap_B_{unique_id}.png"
     A= nx.to_numpy_array(global_graph_b, nodelist= sorted(global_graph_b.nodes()))
     if A.size==0:
         raise HTTPException(status_code=400, detail="Graph B empty.")
@@ -420,7 +474,11 @@ async def heatmap_b():
     ax.set_title("Heatmap B")
     plt.savefig(out_png,dpi=150,bbox_inches="tight")
     plt.close(fig)
-    return FileResponse(out_png,media_type="image/png",filename="adjacency_heatmap_B.png")
+    return FileResponse(
+        out_png,
+        media_type="image/png",
+        filename=f"adjacency_heatmap_B_{unique_id}.png"
+    )
 
 
 @app.get("/statistics")
@@ -473,14 +531,15 @@ async def export_a(format: str= Query("gexf")):
         raise HTTPException(status_code=400, detail="No graph A.")
     if format not in ["gexf","graphml","json"]:
         raise HTTPException(status_code=400, detail="Unsupported format.")
-    out= f"static/graphA_export.{format}"
+    unique_id = uuid.uuid4().hex
+    out = f"static/graphA_export_{unique_id}.{format}"
     try:
         if format=="gexf":
             nx.write_gexf(global_graph_a,out)
-            return FileResponse(out,media_type="application/octet-stream", filename="graphA_export.gexf")
+            return FileResponse(out,media_type="application/octet-stream", filename=f"graphA_export_{unique_id}.gexf")
         elif format=="graphml":
             nx.write_graphml(global_graph_a,out)
-            return FileResponse(out,media_type="application/xml", filename="graphA_export.graphml")
+            return FileResponse(out,media_type="application/xml", filename=f"graphA_export_{unique_id}.graphml")
         else:
             data=json_graph.node_link_data(global_graph_a)
             return JSONResponse(content=data)
@@ -494,14 +553,15 @@ async def export_b(format: str= Query("gexf")):
         raise HTTPException(status_code=400, detail="No graph B.")
     if format not in ["gexf","graphml","json"]:
         raise HTTPException(status_code=400, detail="Unsupported format.")
-    out= f"static/graphB_export.{format}"
+    unique_id = uuid.uuid4().hex
+    out = f"static/graphB_export_{unique_id}.{format}"
     try:
         if format=="gexf":
             nx.write_gexf(global_graph_b,out)
-            return FileResponse(out,media_type="application/octet-stream", filename="graphB_export.gexf")
+            return FileResponse(out,media_type="application/octet-stream",filename= f"graphB_export_{unique_id}.gexf")
         elif format=="graphml":
             nx.write_graphml(global_graph_b,out)
-            return FileResponse(out,media_type="application/xml", filename="graphB_export.graphml")
+            return FileResponse(out,media_type="application/xml", filename=f"graphB_export_{unique_id}.graphml")
         else:
             data= json_graph.node_link_data(global_graph_b)
             return JSONResponse(content=data)

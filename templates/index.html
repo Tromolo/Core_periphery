@@ -125,6 +125,7 @@
           <p>Periphery Nodes: <span id="cpPeripheryCountA"></span></p>
           <p>Sample Core: <span id="cpCoreSampleA"></span></p>
           <p>Sample Periphery: <span id="cpPeripherySampleA"></span></p>
+          <p>Core-Periphery Coefficient: <span id="cpCoefficientA"></span></p>
         </div>
       </div>
 
@@ -191,6 +192,7 @@
           <p>Periphery Nodes: <span id="cpPeripheryCountB"></span></p>
           <p>Sample Core: <span id="cpCoreSampleB"></span></p>
           <p>Sample Periphery: <span id="cpPeripherySampleB"></span></p>
+          <p>Core-Periphery Coefficient: <span id="cpCoefficientB"></span></p>
         </div>
       </div>
 
@@ -307,6 +309,10 @@
       a.core_periphery_data.core_nodes_sample.join(', ');
     document.getElementById('cpPeripherySampleA').textContent =
       a.core_periphery_data.periphery_nodes_sample.join(', ');
+    document.getElementById('cpCoefficientA').textContent =
+      (typeof a.core_periphery_data.core_periphery_coefficient === 'number') ?
+      a.core_periphery_data.core_periphery_coefficient.toFixed(4) :
+      a.core_periphery_data.core_periphery_coefficient;
     document.getElementById('graphImageA').src = a.graph_image;
     document.getElementById('clusteringImageA').src = a.clustering_image;
     document.getElementById('communityImageA').src = a.community_image;
@@ -333,6 +339,10 @@
         b.core_periphery_data.core_nodes_sample.join(', ');
       document.getElementById('cpPeripherySampleB').textContent =
         b.core_periphery_data.periphery_nodes_sample.join(', ');
+      document.getElementById('cpCoefficientB').textContent =
+        (typeof b.core_periphery_data.core_periphery_coefficient === 'number') ?
+        b.core_periphery_data.core_periphery_coefficient.toFixed(4) :
+        b.core_periphery_data.core_periphery_coefficient;
       document.getElementById('graphImageB').src = b.graph_image;
       document.getElementById('clusteringImageB').src = b.clustering_image;
       document.getElementById('communityImageB').src = b.community_image;
