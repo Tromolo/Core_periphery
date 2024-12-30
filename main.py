@@ -18,6 +18,9 @@ import dask.delayed
 import uvicorn
 import matplotlib as mpl
 import numpy as np
+import community as community_louvain
+import dask.dataframe as dd
+from joblib import Parallel, delayed
 
 app = FastAPI()
 
@@ -72,18 +75,28 @@ def load_graph_file(file: UploadFile) -> nx.Graph:
             G = nx.read_edgelist(path, create_using=nx.MultiGraph())
         elif ext in ["csv","txt"]:
             df = pd.read_csv(path, sep=None, header=None, engine='python')
-            if df.shape[1]<2:
-                raise ValueError("File must have at least two columns (source,target).")
-            if df.shape[1]==2:
-                G= nx.from_pandas_edgelist(df, source=0, target=1)
+            df.columns = df.columns.str.strip()
+
+            if "source" in df.columns and "target" in df.columns:
+                G = nx.from_pandas_edgelist(df.compute(), source="source", target="target")
             else:
-                G= nx.from_pandas_edgelist(df, source=0, target=1, edge_attr=2)
+                raise ValueError("CSV file must contain 'source' and 'target' columns.")
         else:
-            raise ValueError("Unsupported file type: "+ext)
+            raise ValueError(f"Unsupported file type: {ext}")
+
         return G
     finally:
         if os.path.exists(path):
             os.remove(path)
+
+def parallel_betweenness_centrality(G, n_jobs=-1):
+    nodes = list(G.nodes())
+    results = Parallel(n_jobs=n_jobs)(
+        delayed(nx.betweenness_centrality_subset)(G, sources=[node], targets=None, normalized=True)
+        for node in nodes
+    )
+    combined = {k: v for result in results for k, v in result.items()}
+    return combined
 
 def filter_graph(
     G: nx.Graph,
@@ -115,6 +128,8 @@ def filter_graph(
             chosen=c[filter_community_id]
             H= H.subgraph(chosen).copy()
     return H
+
+
 
 def detect_core_periphery_by_degree(G: nx.Graph, threshold:int):
     degs= dict(G.degree())
@@ -213,6 +228,33 @@ def detect_communities(G: nx.Graph, suffix:str):
         raise HTTPException(status_code=500, detail=f"Error in community detection {suffix}: {e}")
 
 
+# modularity_core_periphery_detection modularita podla Rombach et al. (2017)
+def modularity_core_periphery_detection(G: nx.Graph):
+
+    if G.number_of_nodes() == 0:
+        return [], []
+
+    partition = community_louvain.best_partition(G)
+
+    community_groups = {}
+    for node, comm_id in partition.items():
+        community_groups.setdefault(comm_id, []).append(node)
+
+    max_density = -1
+    core_comm = None
+    for comm_id, nodes in community_groups.items():
+        subgraph = G.subgraph(nodes)
+        d = nx.density(subgraph)
+        if d > max_density:
+            max_density = d
+            core_comm = comm_id
+
+    core_nodes = community_groups[core_comm]
+    periphery_nodes = [n for n in G.nodes() if n not in core_nodes]
+
+    return core_nodes, periphery_nodes
+
+
 # Koeficient jadra a periferii podla Holme (2005)
 def compute_core_periphery_coefficient(G: nx.Graph, core_nodes: list, periphery_nodes: list):
     if G.number_of_nodes() == 0:
@@ -244,44 +286,29 @@ def compute_core_periphery_coefficient(G: nx.Graph, core_nodes: list, periphery_
     coefficient = actual_edges / ideal_edges if ideal_edges > 0 else 0.0
     return coefficient
 
-def visualize_graph(G: nx.Graph, suffix:str, layout="spring", node_size_scale=10.0, node_alpha=1.0):
+def visualize_graph(G: nx.Graph, suffix: str, layout="spring", node_size_scale=10.0, node_alpha=1.0):
     unique_id = uuid.uuid4().hex
     outimg = f"static/graph_improved{suffix}_{unique_id}.png"
     try:
-        if G.number_of_nodes()==0:
-            plt.figure(figsize=(6,4))
-            plt.text(0.5,0.5, f"No nodes {suffix}", ha='center',va='center',fontsize=14)
-            plt.axis('off')
+        if G.number_of_nodes() == 0:
+            plt.figure(figsize=(6, 4))
+            plt.text(0.5, 0.5, f"No nodes {suffix}", ha="center", va="center", fontsize=14)
+            plt.axis("off")
             plt.savefig(outimg)
             plt.close()
             return
-        fig,ax= plt.subplots(figsize=(15,10))
-        if layout=="kamada_kawai":
-            pos= nx.kamada_kawai_layout(G)
-        else:
-            pos= nx.spring_layout(G)
-        degs= dict(G.degree())
-        node_sizes= [degs[n]*node_size_scale for n in G.nodes()]
-        node_colors=[degs[n] for n in G.nodes()]
-
-        nodes= nx.draw_networkx_nodes(G,pos,node_size=node_sizes,node_color=node_colors,
-                                      cmap=plt.cm.viridis,alpha=node_alpha, ax=ax)
-        if G.number_of_edges()>2000:
-            print("Skipping edges (large).")
-        else:
-            nx.draw_networkx_edges(G,pos,edge_color="gray",alpha=0.7,ax=ax)
-        top_nodes= sorted(degs, key=degs.get, reverse=True)[:5]
-        nx.draw_networkx_labels(G,pos, labels={n: str(n) for n in top_nodes}, font_size=12,ax=ax)
+        fig, ax = plt.subplots(figsize=(15, 10))
+        pos = nx.spring_layout(G) if layout == "spring" else nx.kamada_kawai_layout(G)
+        node_sizes = [dict(G.degree()).get(n, 1) * node_size_scale for n in G.nodes()]
+        node_colors = [dict(G.degree()).get(n, 1) for n in G.nodes()]
+        nx.draw_networkx_nodes(G, pos, node_size=node_sizes, node_color=node_colors, cmap=plt.cm.viridis, alpha=node_alpha, ax=ax)
+        if G.number_of_edges() <= LARGE_EDGE_THRESHOLD:
+            nx.draw_networkx_edges(G, pos, edge_color="gray", alpha=0.7, ax=ax)
         ax.set_title(f"{layout.capitalize()} Graph Visualization {suffix}")
         ax.axis("off")
-        fig.colorbar(nodes,ax=ax,label="Node Degree")
-
         plt.savefig(outimg)
-        print(f"Graph visualization saved to {outimg}")
-
-        return outimg
     except Exception as e:
-        print(f"Error in visualize graph {suffix}: {e}")
+        print(f"Error in visualizing graph {suffix}: {e}")
     finally:
         plt.close()
 
@@ -406,37 +433,40 @@ async def home(request: Request):
 
 @app.post("/upload")
 async def upload_file(
-    fileA: UploadFile= File(...),
-    fileB: UploadFile= File(None),
-    degree_threshold: int= Query(0),
-    layout: str= Query("spring"),
-    node_size_scale: float= Query(10.0),
-    node_alpha: float= Query(1.0),
-    min_degree: int= Query(0),
-    largest_component: bool= Query(False),
-    filter_community_id: int= Query(-1),
-    edge_weight_threshold: float= Query(0.0)
+    fileA: UploadFile = File(...),
+    fileB: UploadFile = File(None),
+    degree_threshold: int = Query(0),
+    layout: str = Query("spring"),
+    node_size_scale: float = Query(10.0),
+    node_alpha: float = Query(1.0),
+    min_degree: int = Query(0),
+    largest_component: bool = Query(False),
+    filter_community_id: int = Query(-1),
+    edge_weight_threshold: float = Query(0.0),
 ):
     global global_graph_a, global_graph_b
     try:
-        # A
-        Ga= load_graph_file(fileA)
-        global_graph_a= Ga
-        Gaf= filter_graph(Ga, min_degree, largest_component, filter_community_id, edge_weight_threshold)
-        resultA= analyze_graph(Gaf, degree_threshold, layout, node_size_scale,node_alpha, suffix="_A")
+        # Analyze Graph A
+        Ga = load_graph_file(fileA)
+        global_graph_a = Ga
+        Gaf = filter_graph(Ga, min_degree, largest_component, filter_community_id, edge_weight_threshold)
+        resultA = analyze_graph(Gaf, degree_threshold, layout, node_size_scale, node_alpha, suffix="_A")
 
-        # B
+        # Analyze Graph B (if provided)
         if fileB and fileB.filename:
-            Gb= load_graph_file(fileB)
-            global_graph_b= Gb
-            Gbf= filter_graph(Gb, min_degree, largest_component, filter_community_id, edge_weight_threshold)
-            resultB= analyze_graph(Gbf, degree_threshold, layout, node_size_scale,node_alpha, suffix="_B")
+            Gb = load_graph_file(fileB)
+            global_graph_b = Gb
+            Gbf = filter_graph(Gb, min_degree, largest_component, filter_community_id, edge_weight_threshold)
+            resultB = analyze_graph(Gbf, degree_threshold, layout, node_size_scale, node_alpha, suffix="_B")
             return {"graphA": resultA, "graphB": resultB}
         else:
-            global_graph_b=None
+            global_graph_b = None
             return {"graphA": resultA}
+
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        import traceback
+        traceback.print_exc()  # Print the full traceback in the console for debugging
+        raise HTTPException(status_code=500, detail=f"Error analyzing graphs: {str(e)}")
 
 
 @app.get("/heatmap", response_class=FileResponse)
