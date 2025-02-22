@@ -11,3 +11,5 @@ jinja2
 numpy~=2.2.1
 python-multipart
 community~=1.0.0b1
+joblib~=1.3.0
+numba~=0.57.1
