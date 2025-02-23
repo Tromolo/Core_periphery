@@ -7,7 +7,7 @@ import time
 from datetime import datetime
 import glob
 
-from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi import FastAPI, File, UploadFile, HTTPException, Form
 from fastapi.responses import JSONResponse
 import pandas as pd
 import uvicorn
@@ -52,7 +52,7 @@ app.add_middleware(
 global_graph = None
 
 @app.post("/upload_graph")
-async def upload_graph(file: UploadFile = File(...), algorithm: str = "rombach"):
+async def upload_graph(file: UploadFile = File(...), algorithm: str = Form(...)):
     try:
         
         if algorithm not in ["rombach", "be", "holme"]:

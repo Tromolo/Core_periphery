@@ -56,11 +56,15 @@ function App() {
   const [graphData, setGraphData] = useState(null);
   const [metrics, setMetrics] = useState(null);
   const [plotData, setPlotData] = useState(null);
+  const [csvFile, setCsvFile] = useState(null);
+  const [imageFile, setImageFile] = useState(null);
 
   const handleGraphUpload = (data) => {
     setGraphData(data.classifications);
     setMetrics(data.metrics);
     setPlotData(data.interactive_plot);
+    setCsvFile(data.csv_file);
+    setImageFile(data.image_file);
   };
 
   return (
@@ -113,6 +117,8 @@ function App() {
                       graphData={graphData} 
                       metrics={metrics} 
                       plotData={plotData}
+                      csvFile={csvFile}
+                      imageFile={imageFile}
                     />
                   </Box>
                 </>

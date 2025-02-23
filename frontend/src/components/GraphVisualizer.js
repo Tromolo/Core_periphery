@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Box, Card, Typography, Button, Grow } from '@mui/material';
 import Plot from 'react-plotly.js';
 import { useTheme } from '@mui/material/styles';
@@ -14,27 +14,19 @@ import {
   Stack 
 } from '@mui/material';
 
-const GraphVisualizer = ({ data }) => {
+const GraphVisualizer = ({ graphData, metrics, plotData, csvFile, imageFile }) => {
   const theme = useTheme();
 
-  if (!data) {
-    return <Typography variant="h6">Loading...</Typography>; 
-  }
-
-  const { metrics, interactive_plot, csv_file, image_file } = data; 
-
-  console.log("GraphVisualizer props:", { metrics, interactive_plot, csv_file, image_file });
-
-  if (!interactive_plot) {
-    console.log("No interactive plot data available");
-    return null;
-  }
 
   const handleDownloadCSV = () => {
-    const csvFileUrl = `http://localhost:8080/static/${csv_file}`; 
+    if (!csvFile) {
+      console.error('CSV file is not defined');
+      return;
+    }
+    const csvFileUrl = `http://localhost:8080/static/${csvFile}`; 
     const link = document.createElement("a");
     link.setAttribute("href", csvFileUrl);
-    link.setAttribute("download", csv_file);
+    link.setAttribute("download", csvFile);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -67,7 +59,7 @@ const GraphVisualizer = ({ data }) => {
             }
           }}
         >
-          Download Results
+          Download CSV
         </Button>
       </Box>
 
@@ -89,14 +81,11 @@ const GraphVisualizer = ({ data }) => {
               Interactive Network Visualization
             </Typography>
             <Plot
-              data={interactive_plot.data}
-              layout={interactive_plot.layout}
+              data={plotData.data}
+              layout={plotData.layout}
               config={{ displayModeBar: false }}
               style={{ width: '100%', height: '70vh' }}
             />
-            <Button onClick={handleDownloadCSV} variant="contained" sx={{ mt: 2 }}>
-              Download CSV
-            </Button>
           </Card>
         </Grow>
 
@@ -130,7 +119,7 @@ const GraphVisualizer = ({ data }) => {
           </Grow>
         )}
 
-        {image_file && (
+        {imageFile && (
           <Grow in={true} timeout={700}>
             <Card
               sx={{
@@ -148,7 +137,7 @@ const GraphVisualizer = ({ data }) => {
               </Typography>
               <Box 
                 component="img"
-                src={`http://localhost:8080/static/${image_file}`}
+                src={`http://localhost:8080/static/${imageFile}`}
                 alt="Generated Network Visualization"
                 sx={{
                   maxWidth: '100%',

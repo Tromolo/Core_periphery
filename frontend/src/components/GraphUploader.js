@@ -46,6 +46,8 @@ const GraphUploader = ({ onUpload }) => {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('algorithm', algorithm);
+    // sending algorithm to backend correctly backend receives algorithm as rombach
+    console.log("Algorithm:", algorithm);
 
     try {
       const response = await fetch('http://localhost:8080/upload_graph', {
