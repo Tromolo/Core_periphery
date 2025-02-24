@@ -1,6 +1,6 @@
 import numpy as np
 from backend.CPAlgorithm import CPAlgorithm
-from utils import to_adjacency_matrix
+from .utils import to_adjacency_matrix
 
 
 class Holme(CPAlgorithm):

@@ -2,8 +2,8 @@ import numba
 import numpy as np
 from joblib import Parallel, delayed
 
-import utils
-from CPAlgorithm import CPAlgorithm
+from . import utils
+from .CPAlgorithm import CPAlgorithm
 
 
 class BE(CPAlgorithm):

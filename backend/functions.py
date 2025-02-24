@@ -8,11 +8,11 @@ from fastapi import UploadFile
 import os
 import shutil
 import pandas as pd
-from BE import BE
-from Holme import Holme
-from rombach import Rombach
-from Metrics import calculate_all_network_metrics
-from utils import draw, draw_interactive, save_visualization
+from .BE import BE
+from .Holme import Holme
+from .rombach import Rombach
+from .Metrics import calculate_all_network_metrics
+from .utils import draw, draw_interactive, save_visualization
 
 output_dir = "../static"
 if not os.path.exists(output_dir):

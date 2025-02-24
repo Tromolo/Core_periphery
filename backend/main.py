@@ -16,9 +16,9 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.responses import FileResponse
 
-from functions import classify_and_save_edges, process_graph_with_rombach, process_graph_with_be, process_graph_with_holme, load_graph_file, process_graph
-from utils import  draw_interactive
-from Metrics import calculate_all_network_metrics
+from .functions import classify_and_save_edges, process_graph_with_rombach, process_graph_with_be, process_graph_with_holme, load_graph_file, process_graph
+from .utils import  draw_interactive
+from .Metrics import calculate_all_network_metrics
 
 from contextlib import asynccontextmanager
 

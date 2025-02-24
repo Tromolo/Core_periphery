@@ -32,6 +32,34 @@ const GraphVisualizer = ({ graphData, metrics, plotData, csvFile, imageFile }) =
     document.body.removeChild(link);
   };
 
+  const handleDownloadImage = async () => {
+    if (!imageFile) {
+      console.error('Image file is not defined');
+      return;
+    }
+    
+    const imageUrl = `http://localhost:8080/static/${imageFile}`;
+
+    try {
+      const response = await fetch(imageUrl);
+      if (!response.ok) {
+        throw new Error('Network response was not ok');
+      }
+      
+      const blob = await response.blob(); 
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", imageFile); 
+      document.body.appendChild(link);
+      link.click(); 
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error downloading image:', error);
+    }
+  };
+
   return (
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
@@ -47,20 +75,6 @@ const GraphVisualizer = ({ graphData, metrics, plotData, csvFile, imageFile }) =
         >
           Network Visualization
         </Typography>
-        
-        <Button
-          variant="contained"
-          startIcon={<Download />}
-          onClick={handleDownloadCSV}
-          sx={{
-            bgcolor: theme.palette.primary.main,
-            '&:hover': {
-              bgcolor: theme.palette.primary.dark,
-            }
-          }}
-        >
-          Download CSV
-        </Button>
       </Box>
 
       <Stack spacing={4}>
@@ -84,7 +98,7 @@ const GraphVisualizer = ({ graphData, metrics, plotData, csvFile, imageFile }) =
               data={plotData.data}
               layout={plotData.layout}
               config={{ displayModeBar: false }}
-              style={{ width: '100%', height: '70vh' }}
+              style={{ width: '100%', height: 'auto' }}
             />
           </Card>
         </Grow>
@@ -149,41 +163,59 @@ const GraphVisualizer = ({ graphData, metrics, plotData, csvFile, imageFile }) =
           </Grow>
         )}
 
-        {metrics && (
-          <Grid container spacing={3}>
-            <Grid item xs={12} sm={6} md={3}>
-              <MetricCard
-                title="Total Nodes"
-                value={metrics.node_count}
-                icon={<Hub />}
-                delay={0}
-              />
-            </Grid>
-            <Grid item xs={12} sm={6} md={3}>
-              <MetricCard
-                title="Total Edges"
-                value={metrics.edge_count}
-                icon={<Timeline />}
-                delay={100}
-              />
-            </Grid>
-            <Grid item xs={12} sm={6} md={3}>
-              <MetricCard
-                title="Core Size"
-                value={metrics.core_stats?.core_size}
-                icon={<AccountTree />}
-                delay={200}
-              />
-            </Grid>
-            <Grid item xs={12} sm={6} md={3}>
-              <MetricCard
-                title="Periphery Size"
-                value={metrics.core_stats?.periphery_size}
-                icon={<DeviceHub />}
-                delay={300}
-              />
-            </Grid>
+      {metrics && (
+        <Grid container spacing={3} sx={{ ml: 2 }}> 
+          <Grid item xs={12} sm={6} md={3}>
+            <MetricCard
+              title="Total Nodes"
+              value={metrics.node_count}
+              icon={<Hub />}
+              delay={0}
+            />
           </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+            <MetricCard
+              title="Total Edges"
+              value={metrics.edge_count}
+              icon={<Timeline />}
+              delay={100}
+            />
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+            <MetricCard
+              title="Core Size"
+              value={metrics.core_stats?.core_size}
+              icon={<AccountTree />}
+              delay={200}
+            />
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+            <MetricCard
+              title="Periphery Size"
+              value={metrics.core_stats?.periphery_size}
+              icon={<DeviceHub />}
+              delay={300}
+            />
+          </Grid>
+        </Grid>
+      )}
+      </Stack>
+      <Stack direction="row" spacing={2} sx={{ mt: 4, justifyContent: 'center' }}>
+        {csvFile && (
+          <Button 
+            onClick={handleDownloadCSV} 
+            variant="contained"
+          >
+            Download CSV
+          </Button>
+        )}
+        {imageFile && (
+          <Button 
+            onClick={handleDownloadImage} 
+            variant="contained"
+          >
+            Download Image
+          </Button>
         )}
       </Stack>
     </Box>

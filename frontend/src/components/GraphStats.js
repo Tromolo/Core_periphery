@@ -15,7 +15,9 @@ import {
   Timeline, 
   Hub, 
   Share, 
-  AccountTree 
+  AccountTree,
+  TrendingUp,
+  Lan
 } from '@mui/icons-material';
 
 const StatCard = ({ label, value, icon, color }) => (
@@ -173,6 +175,86 @@ const GraphStats = ({ graphData, metrics }) => {
                         label="Avg Path Length" 
                         value={metrics.avg_path_length}
                         icon={<Timeline />}
+                        color={theme.palette.primary.main}
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <StatCard 
+                        label="Top Node Degree" 
+                        value={metrics.top_nodes[0]?.degree || 'N/A'}
+                        icon={<AccountTree />}
+                        color={theme.palette.primary.main}
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <StatCard 
+                        label="Average Degree" 
+                        value={metrics.avg_degree || 'N/A'}
+                        icon={<Share />}
+                        color={theme.palette.primary.main}
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <StatCard 
+                        label="Diameter" 
+                        value={metrics.diameter || 'N/A'}
+                        icon={<Timeline />}
+                        color={theme.palette.primary.main}
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <StatCard 
+                        label="Assortativity" 
+                        value={metrics.assortativity || 'N/A'}
+                        icon={<Share />}
+                        color={theme.palette.primary.main}
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <StatCard 
+                        label="Core Density" 
+                        value={metrics.core_stats?.core_density || 'N/A'}
+                        icon={<AccountTree />}
+                        color={theme.palette.primary.main}
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <StatCard 
+                        label="Periphery Connectivity" 
+                        value={metrics.periphery_core_connectivity || 'N/A'}
+                        icon={<Share />}
+                        color={theme.palette.primary.main}
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <StatCard 
+                        label="Betweenness Centrality" 
+                        value={metrics.betweenness_centrality || 'N/A'}
+                        icon={<Hub />}
+                        color={theme.palette.primary.main}
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <StatCard 
+                        label="Edge Density" 
+                        value={metrics.edge_density || 'N/A'}
+                        icon={<Share />}
+                        color={theme.palette.primary.main}
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <StatCard 
+                        label="Eigenvector Centrality" 
+                        value={metrics.eigenvector_centrality || 'N/A'}
+                        icon={<TrendingUp />}
+                        color={theme.palette.primary.main}
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <StatCard 
+                        label="Graph Connectivity" 
+                        value={metrics.graph_connectivity || 'N/A'}
+                        icon={<Lan />}
                         color={theme.palette.primary.main}
                       />
                     </Grid>

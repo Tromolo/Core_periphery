@@ -4,8 +4,8 @@ import numba
 import numpy as np
 from simanneal import Annealer
 
-import utils
-from backend.CPAlgorithm import CPAlgorithm
+from . import utils
+from .CPAlgorithm import CPAlgorithm
 
 
 class Rombach(CPAlgorithm):
