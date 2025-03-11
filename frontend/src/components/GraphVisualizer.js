@@ -14,7 +14,7 @@ import {
   Stack 
 } from '@mui/material';
 
-const GraphVisualizer = ({ graphData, metrics, plotData, csvFile, imageFile }) => {
+const GraphVisualizer = ({ graphData, metrics, plotData, csvFile, imageFile, gdfFile }) => {
   const theme = useTheme();
 
 
@@ -58,6 +58,21 @@ const GraphVisualizer = ({ graphData, metrics, plotData, csvFile, imageFile }) =
     } catch (error) {
       console.error('Error downloading image:', error);
     }
+  };
+
+  const handleDownloadGDF = () => {
+    if (!gdfFile) {
+      console.error('GDF file is not defined');
+      return;
+    }
+    
+    const gdfFileUrl = `http://localhost:8080/static/${gdfFile}`;
+    const link = document.createElement("a");
+    link.setAttribute("href", gdfFileUrl);
+    link.setAttribute("download", gdfFile);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   return (
@@ -149,6 +164,7 @@ const GraphVisualizer = ({ graphData, metrics, plotData, csvFile, imageFile }) =
               <Typography variant="h6" sx={{ mb: 2 }}>
                 Generated Network Visualization
               </Typography>
+              {console.log("Image file URL:", `http://localhost:8080/static/${imageFile}`)}
               <Box 
                 component="img"
                 src={`http://localhost:8080/static/${imageFile}`}
@@ -157,6 +173,12 @@ const GraphVisualizer = ({ graphData, metrics, plotData, csvFile, imageFile }) =
                   maxWidth: '100%',
                   height: 'auto',
                   borderRadius: '8px',
+                }}
+                onError={(e) => {
+                  console.error("Failed to load image:", e);
+                  console.error("Image URL was:", e.target.src);
+                  e.target.onerror = null; // Prevent infinite loop
+                  e.target.src = "https://via.placeholder.com/800x600?text=Visualization+Not+Available";
                 }}
               />
             </Card>
@@ -215,6 +237,14 @@ const GraphVisualizer = ({ graphData, metrics, plotData, csvFile, imageFile }) =
             variant="contained"
           >
             Download Image
+          </Button>
+        )}
+        {gdfFile && (
+          <Button 
+            onClick={handleDownloadGDF} 
+            variant="contained"
+          >
+            Download GDF (Gephi)
           </Button>
         )}
       </Stack>

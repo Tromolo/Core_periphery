@@ -2,9 +2,12 @@ import networkx as nx
 from community import community_louvain
 from joblib import Parallel, delayed
 import numpy as np
+import uuid
+import matplotlib.pyplot as plt
+import os
 from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, Any, Optional
-
+from collections import Counter
 
 def calculate_average_path_length(G):
     try:
@@ -124,6 +127,29 @@ def calculate_network_metrics(graph: nx.Graph) -> Dict[str, Any]:
         return None
 
 
+def calculate_connected_components(G):
+    """Calculate connected components statistics."""
+    components = list(nx.connected_components(G))
+    num_components = len(components)
+    
+    if num_components == 0:
+        return {
+            "num_components": 0,
+            "largest_component_size": 0,
+            "smallest_component_size": 0,
+            "component_size_distribution": []
+        }
+    
+    component_sizes = [len(comp) for comp in components]
+    
+    return {
+        "num_components": num_components,
+        "largest_component_size": max(component_sizes),
+        "smallest_component_size": min(component_sizes),
+        "component_size_distribution": sorted(component_sizes, reverse=True)
+    }
+
+
 def calculate_all_network_metrics(graph: nx.Graph, classifications: Dict, coreness: Dict, 
                                 algorithm: str = None, algorithm_params: Dict = None) -> Dict:
     """
@@ -195,6 +221,9 @@ def calculate_all_network_metrics(graph: nx.Graph, classifications: Dict, corene
         top_nodes.sort(key=lambda x: x["coreness"], reverse=True)
         metrics["top_nodes"] = top_nodes[:5]
 
+        # Add connected components analysis
+        metrics["connected_components"] = calculate_connected_components(graph)
+
         return metrics
 
     except Exception as e:
@@ -223,4 +252,106 @@ def calculate_centrality_metrics(graph):
             return centrality_metrics
     except Exception as e:
         print(f"Error calculating centrality metrics: {str(e)}")
+        return None
+    
+def prepare_community_analysis_data(graph):
+    """
+    Prepare community analysis data for visualization in the frontend.
+    Returns community statistics, visualization, and membership information.
+    """
+    try:
+        # Detect communities using Louvain method
+        communities = community_louvain.best_partition(graph)
+        
+        # Calculate modularity score
+        modularity = community_louvain.modularity(communities, graph)
+        
+        # Count community sizes
+        community_sizes = Counter(communities.values())
+        
+        # Prepare size distribution for visualization
+        size_distribution = [
+            {"community": str(community), "size": size} 
+            for community, size in sorted(community_sizes.items())
+        ]
+        
+        # Calculate basic statistics
+        num_communities = len(community_sizes)
+        community_size_values = list(community_sizes.values())
+        mean_size = np.mean(community_size_values)
+        max_size = max(community_size_values)
+        min_size = min(community_size_values)
+        
+        # Create visualization
+        plt.figure(figsize=(10, 8))
+        pos = nx.spring_layout(graph, seed=42)
+        
+        # Create color map for communities
+        cmap = plt.cm.get_cmap("tab20", num_communities)
+        community_colors = {}
+        
+        for node, community_id in communities.items():
+            if community_id not in community_colors:
+                community_colors[community_id] = cmap(community_id % num_communities)
+                
+        node_colors = [community_colors[communities[node]] for node in graph.nodes()]
+        
+        nx.draw_networkx(
+            graph,
+            pos=pos,
+            node_color=node_colors,
+            with_labels=False,
+            node_size=80,
+            edge_color="gray",
+            alpha=0.7
+        )
+        
+        plt.title("Community Structure Visualization")
+        plt.axis("off")
+        
+        # Get the current working directory and construct absolute path
+        import os
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        # Go up one level to the project root and then to static
+        output_dir = os.path.abspath(os.path.join(current_dir, "..", "static"))
+        print(f"Current directory: {current_dir}")
+        print(f"Attempting to save visualization to directory: {output_dir}")
+        
+        try:
+            # Ensure the directory exists
+            os.makedirs(output_dir, exist_ok=True)
+            
+            # Generate a unique filename
+            community_viz_file = f"{uuid.uuid4()}_community.png"
+            full_path = os.path.join(output_dir, community_viz_file)
+            print(f"Saving visualization to: {full_path}")
+            
+            # Save the figure
+            plt.savefig(full_path, dpi=300, bbox_inches="tight")
+            print(f"Successfully saved visualization to: {full_path}")
+            
+            # Check if file was actually created
+            if os.path.exists(full_path):
+                print(f"Confirmed file exists at: {full_path}")
+            else:
+                print(f"WARNING: File was not created at: {full_path}")
+                
+            plt.close()
+        except Exception as save_error:
+            print(f"Error saving visualization: {str(save_error)}")
+            community_viz_file = None
+        
+        # Return data in the format expected by the frontend
+        return {
+            "num_communities": num_communities,
+            "mean_size": round(mean_size, 2),
+            "max_size": max_size,
+            "min_size": min_size,
+            "modularity": round(modularity, 3),
+            "size_distribution": size_distribution,
+            "visualization_file": community_viz_file,
+            "community_membership": {str(node): community for node, community in communities.items()}
+        }
+    except Exception as e:
+        print(f"Error in community analysis: {str(e)}")
         return None

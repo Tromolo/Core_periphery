@@ -12,6 +12,10 @@ import {
 import GraphUploader from "./components/GraphUploader";
 import GraphVisualizer from "./components/GraphVisualizer";
 import GraphStats from "./components/GraphStats";
+import NetworkBarChart from "./components/NetworkBarChart";
+import CommunityAnalysis from "./components/CommunityAnalysis";
+import ConnectedComponentsChart from "./components/ConnectedComponentsChart";
+import MetricsTable from "./components/MetricsTable";
 
 const theme = createTheme({
   palette: {
@@ -58,6 +62,8 @@ function App() {
   const [plotData, setPlotData] = useState(null);
   const [csvFile, setCsvFile] = useState(null);
   const [imageFile, setImageFile] = useState(null);
+  const [gdfFile, setGdfFile] = useState(null);
+  const [communityData, setCommunityData] = useState(null);
 
   const handleGraphUpload = (data) => {
     setGraphData(data.classifications);
@@ -65,6 +71,9 @@ function App() {
     setPlotData(data.interactive_plot);
     setCsvFile(data.csv_file);
     setImageFile(data.image_file);
+    setGdfFile(data.gdf_file);
+    setCommunityData(data.community_data);
+    
   };
 
   return (
@@ -119,8 +128,33 @@ function App() {
                       plotData={plotData}
                       csvFile={csvFile}
                       imageFile={imageFile}
+                      gdfFile={gdfFile}
                     />
                   </Box>
+
+                  {metrics && (
+                    <Box sx={{ mt: 5 }}>
+                      <MetricsTable metrics={metrics} />
+                    </Box>
+                  )}
+
+                  {metrics && metrics.connected_components && (
+                    <Box sx={{ mt: 5 }}>
+                      <ConnectedComponentsChart metrics={metrics} />
+                    </Box>
+                  )}
+
+                  {communityData && (
+                    <Box sx={{ mt: 5 }}>
+                      <CommunityAnalysis communityData={communityData} />
+                    </Box>
+                  )}
+
+                  {metrics && (
+                    <Box sx={{ mt: 5 }}>
+                      <NetworkBarChart stats={metrics} />
+                    </Box>
+                  )}
                 </>
               )}
             </Paper>

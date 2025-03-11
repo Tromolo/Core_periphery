@@ -11,7 +11,7 @@ import pandas as pd
 from .BE import BE
 from .Holme import Holme
 from .rombach import Rombach
-from .Metrics import calculate_all_network_metrics
+from .Metrics import calculate_all_network_metrics, prepare_community_analysis_data
 from .utils import draw, draw_interactive, save_visualization
 
 output_dir = "../static"
@@ -46,6 +46,21 @@ def classify_and_save_edges(graph: nx.Graph, classifications: Dict, output_file:
     df = pd.DataFrame(edge_data)
     df.to_csv(output_file, index=False)
 
+def infer_edge_list_columns(df: pd.DataFrame):
+    """Infer source, target, and optional weight columns from a DataFrame."""
+    num_cols = df.shape[1]
+
+    if num_cols == 2:
+        df.columns = ["source", "target"]
+    elif num_cols == 3:
+        df.columns = ["source", "target", "weight"]
+    elif num_cols > 3:
+        df.columns = ["source", "target"] + [f"attr_{i}" for i in range(1, num_cols - 1)]
+    else:
+        raise ValueError(f"Unexpected column count: {num_cols}. Ensure the file is a valid edge list.")
+
+    return df
+
 async def load_graph_file(file: UploadFile) -> nx.Graph:
     if not file.filename:
         raise ValueError("No file provided.")
@@ -69,25 +84,28 @@ async def load_graph_file(file: UploadFile) -> nx.Graph:
         elif ext == "edgelist":
             G = nx.read_edgelist(path, create_using=nx.MultiGraph())
         elif ext in ["csv", "txt"]:
+            # Detect delimiter automatically
+            with open(path, "r") as f:
+                sample = f.read(1024)  # Read a small portion of the file
+                sep = ";" if ";" in sample else ","
+
             try:
-                df = pd.read_csv(path, sep=",")
+                df = pd.read_csv(path, sep=sep)
             except Exception as e:
-                raise ValueError(f"Failed to read CSV with header: {e}")
+                raise ValueError(f"Failed to read CSV with detected separator '{sep}': {e}")
 
-            if 'source' not in df.columns or 'target' not in df.columns:
-                df = pd.read_csv(path, sep=",", header=None)
-                if df.shape[1] == 2:
-                    df.columns = ["source", "target"]
-                elif df.shape[1] == 3:
-                    df.columns = ["source", "target", "weight"]
+            if df.shape[1] < 2:
+                raise ValueError(f"Invalid edge list format: {df.shape[1]} columns found.")
 
-            if df.shape[1] == 2:
-                G = nx.from_pandas_edgelist(df, source="source", target="target")
-            elif df.shape[1] == 3:
-                G = nx.from_pandas_edgelist(df, source="source", target="target", edge_attr="weight")
-            else:
-                extra_attrs = list(df.columns.difference(["source", "target"]))
-                G = nx.from_pandas_edgelist(df, source="source", target="target", edge_attr=extra_attrs)
+            if "source" not in df.columns or "target" not in df.columns:
+                df = pd.read_csv(path, sep=sep, header=None)
+                if df.shape[1] < 2:
+                    raise ValueError(f"Invalid edge list format: {df.shape[1]} columns found.")
+
+                df = infer_edge_list_columns(df)
+
+            edge_attrs = list(df.columns.difference(["source", "target"]))
+            G = nx.from_pandas_edgelist(df, source="source", target="target", edge_attr=edge_attrs if edge_attrs else None)
         else:
             raise ValueError(f"Unsupported file type: {ext}")
 
@@ -122,6 +140,28 @@ def process_graph_with_holme(graph: nx.Graph, num_iterations: int = 100, thresho
     mean_coreness = sum(x.values()) / len(x)
     c = {node: 1 if x[node] > mean_coreness else 0 for node in graph.nodes()}
     return c, x
+
+def export_to_gdf(graph, classifications, output_path):
+    """Export graph to GDF format for Gephi."""
+    try:
+        with open(output_path, 'w') as f:
+            # Write node definitions
+            f.write("nodedef>name VARCHAR,label VARCHAR,class VARCHAR\n")
+            for node in graph.nodes():
+                node_class = classifications.get(node, "Unknown")
+                f.write(f"{node},{node},{node_class}\n")
+            
+            # Write edge definitions
+            f.write("edgedef>node1 VARCHAR,node2 VARCHAR,weight DOUBLE\n")
+            for u, v, data in graph.edges(data=True):
+                weight = data.get('weight', 1.0)
+                f.write(f"{u},{v},{weight}\n")
+                
+        print(f"Successfully exported graph to GDF format: {output_path}")
+        return True
+    except Exception as e:
+        print(f"Error exporting to GDF: {str(e)}")
+        return False
 
 def process_graph(graph: nx.Graph, algorithm: str = "rombach", **kwargs) -> Dict[str, Any]:
     """Process graph with specified algorithm and calculate metrics."""
@@ -170,24 +210,44 @@ def process_graph(graph: nx.Graph, algorithm: str = "rombach", **kwargs) -> Dict
             algorithm_params=algorithm_params
         )
         
+        # Use absolute path for output files
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        output_dir = os.path.abspath(os.path.join(current_dir, "..", "static"))
+        
         output_csv = f"{uuid.uuid4()}.csv"
         output_img = f"{uuid.uuid4()}.png"
+        output_gdf = f"{uuid.uuid4()}.gdf"
 
-        classify_and_save_edges(graph, classifications, os.path.join(output_dir, output_csv))
-        save_visualization(graph, classifications, os.path.join(output_dir, output_img), 
+        # Use absolute paths for saving files
+        csv_path = os.path.join(output_dir, output_csv)
+        img_path = os.path.join(output_dir, output_img)
+        gdf_path = os.path.join(output_dir, output_gdf)
+        
+        print(f"Saving CSV to: {csv_path}")
+        classify_and_save_edges(graph, classifications, csv_path)
+        
+        print(f"Saving GDF to: {gdf_path}")
+        export_to_gdf(graph, classifications, gdf_path)
+        
+        print(f"Saving visualization to: {img_path}")
+        save_visualization(graph, classifications, img_path, 
                          title=f"Core-Periphery ({algorithm.capitalize()})")
         
         try:
             interactive_plot = draw_interactive(graph, c, x)
         except Exception:
             interactive_plot = None
+        
+        community_data = prepare_community_analysis_data(graph)
 
         return {
             "classifications": classifications,
             "csv_file": output_csv,
+            "gdf_file": output_gdf,
             "image_file": output_img,
             "interactive_plot": interactive_plot,
-            "metrics": metrics
+            "metrics": metrics,
+            "community_data": community_data
         }
         
     except Exception as e:

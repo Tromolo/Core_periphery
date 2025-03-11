@@ -11,6 +11,7 @@ from scipy import sparse
 from typing import Dict, Optional
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
+import os
 
 def to_adjacency_matrix(net):
     if sparse.issparse(net):
@@ -265,50 +266,54 @@ def draw_interactive(G, c, x, hover_text=None, node_size=10.0, pos=None, cmap=No
         print(f"Traceback: {traceback.format_exc()}")
         return None
 
-def save_visualization(graph: nx.Graph, classifications: Dict, output_file: str, title: Optional[str] = None) -> None:
-    """
-    Save graph visualization to a file using the draw function.
-    
-    Args:
-        graph: NetworkX graph object
-        classifications: Dictionary of node classifications (C/P)
-        output_file: Path to save the image file
-        title: Optional title for the plot
-    """
-
-    c = {node: 1 if type == 'C' else 0 for node, type in classifications.items()}
-    x = {node: 1.0 if type == 'C' else 0.0 for node, type in classifications.items()}
-    
-    # Create figure and axis
-    plt.figure(figsize=(12, 8))
-    ax = plt.gca()
-    
-    colored_nodes, _, _ = classify_nodes(graph, c, x)
-    node_colors, node_edge_colors = set_node_colors(c, x, None, colored_nodes)
-    
-    core_node = next((node for node in colored_nodes if c[node] == 1), None)
-    periphery_node = next((node for node in colored_nodes if c[node] == 0), None)
-    
-    draw(G=graph, 
-         c=c, 
-         x=x, 
-         ax=ax,
-         font_size=8,
-         draw_nodes_kwd={'node_size': 500},
-         draw_labels_kwd={'font_weight': 'bold'})
-    
-    if title:
-        plt.title(title)
-    
-    legend_elements = [
-        Patch(facecolor=node_colors[core_node] if core_node else '#ff7f7f',
-              edgecolor=node_edge_colors[core_node] if core_node else '#8b0000',
-              label='Core'),
-        Patch(facecolor=node_colors[periphery_node] if periphery_node else '#7f7fff',
-              edgecolor=node_edge_colors[periphery_node] if periphery_node else '#00008b',
-              label='Periphery')
-    ]
-    ax.legend(handles=legend_elements, loc='upper right')
-    
-    plt.savefig(output_file, bbox_inches='tight', dpi=300)
-    plt.close()
+def save_visualization(graph, classifications, output_path, title=None):
+    """Save a visualization of the graph with core-periphery structure."""
+    try:
+        plt.figure(figsize=(10, 8))
+        
+        # Get node positions
+        pos = nx.spring_layout(graph, seed=42)
+        
+        # Separate core and periphery nodes
+        core_nodes = [node for node, cls in classifications.items() if cls == "C"]
+        periphery_nodes = [node for node, cls in classifications.items() if cls == "P"]
+        
+        # Draw core nodes
+        nx.draw_networkx_nodes(graph, pos, 
+                              nodelist=core_nodes,
+                              node_color='red',
+                              node_size=100,
+                              alpha=0.8)
+        
+        # Draw periphery nodes
+        nx.draw_networkx_nodes(graph, pos, 
+                              nodelist=periphery_nodes,
+                              node_color='blue',
+                              node_size=60,
+                              alpha=0.6)
+        
+        # Draw edges
+        nx.draw_networkx_edges(graph, pos, alpha=0.3)
+        
+        if title:
+            plt.title(title)
+        plt.axis('off')
+        
+        # Save the figure
+        print(f"Debug - Saving visualization to: {output_path}")
+        plt.savefig(output_path, dpi=300, bbox_inches='tight')
+        print(f"Debug - Successfully saved visualization to: {output_path}")
+        
+        # Verify file exists
+        if os.path.exists(output_path):
+            print(f"Debug - Confirmed file exists at: {output_path}")
+        else:
+            print(f"Debug - WARNING: File was not created at: {output_path}")
+            
+        plt.close()
+        print("Debug - Successfully created figure")
+        
+        return True
+    except Exception as e:
+        print(f"Error saving visualization: {str(e)}")
+        return False

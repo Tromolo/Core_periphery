@@ -36,7 +36,11 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-output_dir = "../static"
+# Define the static directory path using absolute path
+current_dir = os.path.dirname(os.path.abspath(__file__))
+output_dir = os.path.abspath(os.path.join(current_dir, "..", "static"))
+print(f"Static directory path: {output_dir}")
+
 if not os.path.exists(output_dir):
     os.makedirs(output_dir)
 
@@ -109,7 +113,7 @@ async def upload_graph(file: UploadFile = File(...), algorithm: str = Form(...))
 
 @app.get("/download/{filename}")
 async def download_file(filename: str):
-    file_path = os.path.join("../static", filename)
+    file_path = os.path.join(output_dir, filename)
     if os.path.exists(file_path):
         return FileResponse(
             path=file_path,
@@ -119,6 +123,12 @@ async def download_file(filename: str):
     else:
         raise HTTPException(status_code=404, detail=f"File not found: {filename}")
 
+
+@app.get("/check_file/{filename}")
+async def check_file(filename: str):
+    file_path = os.path.join("../static", filename)
+    exists = os.path.exists(file_path)
+    return {"filename": filename, "exists": exists, "path": file_path}
 
 
 #Not used for now idk let it here for now
