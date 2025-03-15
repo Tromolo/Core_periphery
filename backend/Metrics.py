@@ -84,8 +84,10 @@ def calculate_network_metrics(graph: nx.Graph) -> Dict[str, Any]:
             
             # Path-based metrics
             try:
-                futures['avg_path_length'] = executor.submit(nx.average_shortest_path_length, graph)
-                futures['diameter'] = executor.submit(nx.diameter, graph)
+                largest_component = max(nx.connected_components(graph), key=len)
+                subgraph = graph.subgraph(largest_component)
+                futures['avg_path_length'] = executor.submit(nx.average_shortest_path_length, subgraph)
+                futures['diameter'] = executor.submit(nx.diameter, subgraph)
             except:
                 futures['avg_path_length'] = None
                 futures['diameter'] = None
@@ -98,6 +100,12 @@ def calculate_network_metrics(graph: nx.Graph) -> Dict[str, Any]:
                 )
             except:
                 futures['modularity'] = None
+            
+            # Assortativity
+            try:
+                futures['assortativity'] = executor.submit(nx.degree_assortativity_coefficient, graph)
+            except:
+                futures['assortativity'] = None
             
             # Collect results
             metrics = {}
@@ -121,9 +129,19 @@ def calculate_network_metrics(graph: nx.Graph) -> Dict[str, Any]:
             # Remove degree_dist from final metrics
             metrics.pop('degree_dist', None)
             
+            # Rename keys to match frontend expectations
+            if 'nodes' in metrics:
+                metrics['node_count'] = metrics.pop('nodes')
+            if 'edges' in metrics:
+                metrics['edge_count'] = metrics.pop('edges')
+            
+            # Add connected components analysis
+            metrics['connected_components'] = calculate_connected_components(graph)
+            
             return metrics
             
-    except Exception:
+    except Exception as e:
+        print(f"Error calculating network metrics: {str(e)}")
         return None
 
 
@@ -314,8 +332,6 @@ def prepare_community_analysis_data(graph):
         current_dir = os.path.dirname(os.path.abspath(__file__))
         # Go up one level to the project root and then to static
         output_dir = os.path.abspath(os.path.join(current_dir, "..", "static"))
-        print(f"Current directory: {current_dir}")
-        print(f"Attempting to save visualization to directory: {output_dir}")
         
         try:
             # Ensure the directory exists
@@ -324,22 +340,41 @@ def prepare_community_analysis_data(graph):
             # Generate a unique filename
             community_viz_file = f"{uuid.uuid4()}_community.png"
             full_path = os.path.join(output_dir, community_viz_file)
-            print(f"Saving visualization to: {full_path}")
             
             # Save the figure
             plt.savefig(full_path, dpi=300, bbox_inches="tight")
-            print(f"Successfully saved visualization to: {full_path}")
-            
-            # Check if file was actually created
-            if os.path.exists(full_path):
-                print(f"Confirmed file exists at: {full_path}")
-            else:
-                print(f"WARNING: File was not created at: {full_path}")
-                
             plt.close()
         except Exception as save_error:
             print(f"Error saving visualization: {str(save_error)}")
             community_viz_file = None
+        
+        # Prepare graph data for Sigma.js visualization
+        graph_data = {
+            "nodes": [],
+            "edges": [],
+            "communities": {}
+        }
+        
+        # Add nodes with positions from the layout
+        for node in graph.nodes():
+            node_id = str(node)  # Convert to string for JSON compatibility
+            community_id = communities[node]
+            graph_data["nodes"].append({
+                "id": node_id,
+                "label": node_id,
+                "size": graph.degree(node) + 3,  # Size based on degree
+                "x": float(pos[node][0]),  # Convert numpy values to Python floats
+                "y": float(pos[node][1])
+            })
+            graph_data["communities"][node_id] = community_id
+        
+        # Add edges
+        for source, target in graph.edges():
+            graph_data["edges"].append({
+                "source": str(source),
+                "target": str(target),
+                "weight": 1  # Default weight
+            })
         
         # Return data in the format expected by the frontend
         return {
@@ -350,7 +385,8 @@ def prepare_community_analysis_data(graph):
             "modularity": round(modularity, 3),
             "size_distribution": size_distribution,
             "visualization_file": community_viz_file,
-            "community_membership": {str(node): community for node, community in communities.items()}
+            "community_membership": {str(node): community for node, community in communities.items()},
+            "graph_data": graph_data  # Add graph data for Sigma.js
         }
     except Exception as e:
         print(f"Error in community analysis: {str(e)}")

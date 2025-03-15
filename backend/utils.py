@@ -264,7 +264,24 @@ def draw_interactive(G, c, x, hover_text=None, node_size=10.0, pos=None, cmap=No
         print(f"Error type: {type(e)}")
         import traceback
         print(f"Traceback: {traceback.format_exc()}")
-        return None
+        # Return a default empty figure structure instead of None
+        return {
+            'data': [],
+            'layout': {
+                'showlegend': False,
+                'hovermode': 'closest',
+                'margin': {'b': 20, 'l': 20, 'r': 20, 't': 20},
+                'xaxis': {'showgrid': False, 'zeroline': False, 'showticklabels': False},
+                'yaxis': {'showgrid': False, 'zeroline': False, 'showticklabels': False},
+                'width': 800,
+                'height': 800,
+                'annotations': [{
+                    'text': 'Visualization not available',
+                    'showarrow': False,
+                    'font': {'size': 20}
+                }]
+            }
+        }
 
 def save_visualization(graph, classifications, output_path, title=None):
     """Save a visualization of the graph with core-periphery structure."""

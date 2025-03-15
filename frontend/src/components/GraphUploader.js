@@ -1,40 +1,34 @@
 import React, { useState } from 'react';
 import { 
-  Card, 
   Box, 
   Typography, 
-  Grow,
   Button,
   CircularProgress,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Stack,
   Snackbar,
-  Alert
+  Alert,
+  Card,
+  Grow
 } from '@mui/material';
 import { 
   CloudUpload
 } from '@mui/icons-material';
 
-
 const GraphUploader = ({ onUpload }) => {
+  const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [algorithm, setAlgorithm] = useState('rombach'); 
-  const [file, setFile] = useState(null); 
-  const [success, setSuccess] = useState(false); 
+  const [success, setSuccess] = useState(false);
 
   const handleFileChange = (event) => {
     const selectedFile = event.target.files[0];
-    if (selectedFile) {
-      setFile(selectedFile);
-      setError(null); 
-    }
+    if (!selectedFile) return;
+    
+    console.log('Selected file:', selectedFile);
+    setFile(selectedFile);
+    setError(null);
   };
 
-  const handleFileUpload = async () => {
+  const handleUpload = async () => {
     if (!file) {
       setError('Please select a file to upload.');
       return;
@@ -45,11 +39,9 @@ const GraphUploader = ({ onUpload }) => {
 
     const formData = new FormData();
     formData.append('file', file);
-    formData.append('algorithm', algorithm);
-    // sending algorithm to backend correctly backend receives algorithm as rombach
-    console.log("Algorithm:", algorithm);
 
     try {
+      console.log('Sending upload request...');
       const response = await fetch('http://localhost:8080/upload_graph', {
         method: 'POST',
         body: formData,
@@ -61,10 +53,17 @@ const GraphUploader = ({ onUpload }) => {
       }
 
       const data = await response.json();
+      console.log('Upload response:', data);
+      
+      // Add file information to the data
+      data.filename = file.name;
+      data.filesize = file.size;
+      data.filetype = file.type;
+      
       onUpload(data);
       setSuccess(true);
-      setFile(null);
     } catch (err) {
+      console.error('Upload error:', err);
       setError(err.message || 'Failed to upload file. Please try again.');
     } finally {
       setLoading(false);
@@ -76,88 +75,101 @@ const GraphUploader = ({ onUpload }) => {
       <Card
         sx={{
           p: 4,
-          textAlign: 'center',
           background: 'linear-gradient(135deg, rgba(255,255,255,0.9), rgba(255,255,255,0.7))',
           backdropFilter: 'blur(10px)',
           boxShadow: 3,
           borderRadius: 2,
+          height: '100%',
+          display: 'flex',
+          flexDirection: 'column',
         }}
       >
-        <Stack spacing={3} alignItems="center">
-          <Box>
-            <input
-              type="file"
-              accept=".csv,.txt,.gml,.graphml,.gexf,.edgelist"
-              onChange={handleFileChange}
-              style={{ display: 'none' }}
-              id="file-upload"
-            />
-            <label htmlFor="file-upload">
-              <Button
-                component="span"
-                variant="contained"
-                size="large"
-                startIcon={<CloudUpload />}
-                sx={{
-                  px: 4,
-                  py: 2,
-                  bgcolor: 'primary.main',
-                  '&:hover': {
-                    bgcolor: 'primary.dark',
-                  },
-                  transition: 'background-color 0.3s ease',
-                }}
-              >
-                {file ? file.name : 'Select Network File'}
-              </Button>
-            </label>
-          </Box>
-
-          <Typography variant="body1" sx={{ color: 'text.secondary' }}>
-            Accepted file types: CSV, TXT, GML, GraphML, GEXF
-          </Typography>
-
-          <FormControl sx={{ minWidth: 200 }}>
-            <InputLabel id="algorithm-select-label">Algorithm</InputLabel>
-            <Select
-              labelId="algorithm-select-label"
-              value={algorithm}
-              label="Algorithm"
-              onChange={(e) => setAlgorithm(e.target.value)}
+        <Typography variant="h5" sx={{ mb: 4, fontWeight: 'bold', color: 'primary.main', textAlign: 'center' }}>
+          Upload Network Graph
+        </Typography>
+        
+        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
+          <input
+            accept=".csv,.txt,.gml,.graphml,.gexf,.edgelist,.net,.pajek"
+            style={{ display: 'none' }}
+            id="basic-graph-file-upload"
+            type="file"
+            onChange={handleFileChange}
+          />
+          <label htmlFor="basic-graph-file-upload">
+            <Button
+              variant="contained"
+              component="span"
+              startIcon={<CloudUpload />}
+              sx={{
+                bgcolor: 'primary.main',
+                color: 'white',
+                '&:hover': {
+                  bgcolor: 'primary.dark',
+                },
+                py: 1.5,
+                px: 3,
+                borderRadius: 2,
+                fontWeight: 'bold',
+                boxShadow: '0 4px 10px rgba(0, 0, 0, 0.15)',
+              }}
             >
-              <MenuItem value="rombach">Rombach</MenuItem>
-              <MenuItem value="be">BE</MenuItem>
-              <MenuItem value="holme">Holme</MenuItem>
-            </Select>
-          </FormControl>
+              SELECT FILE
+            </Button>
+          </label>
+          
+          {file && (
+            <Box sx={{ mt: 3, textAlign: 'center' }}>
+              <Typography variant="body1" sx={{ fontWeight: 'medium' }}>
+                Selected: {file.name}
+              </Typography>
+            </Box>
+          )}
 
-          <Button
-            variant="contained"
-            onClick={handleFileUpload}
-            disabled={loading || !file}
-            sx={{
-              bgcolor: 'primary.main',
-              '&:hover': {
-                bgcolor: 'primary.dark',
-              },
-              transition: 'background-color 0.3s ease',
-            }}
-          >
-            {loading ? <CircularProgress size={24} color="inherit" /> : 'Submit'}
-          </Button>
+          {file && (
+            <Button
+              variant="contained"
+              onClick={handleUpload}
+              disabled={loading}
+              startIcon={loading ? <CircularProgress size={20} color="inherit" /> : <CloudUpload />}
+              sx={{
+                mt: 3,
+                bgcolor: 'primary.main',
+                '&:hover': {
+                  bgcolor: 'primary.dark',
+                },
+                py: 1.5,
+                px: 3,
+                borderRadius: 2,
+                fontWeight: 'bold',
+                boxShadow: '0 4px 10px rgba(0, 0, 0, 0.15)',
+              }}
+            >
+              {loading ? 'UPLOADING...' : 'UPLOAD GRAPH'}
+            </Button>
+          )}
 
           {error && (
-            <Typography color="error">
+            <Typography color="error" sx={{ mt: 2, textAlign: 'center' }}>
               {error}
             </Typography>
           )}
-        </Stack>
 
-        <Snackbar open={success} autoHideDuration={6000} onClose={() => setSuccess(false)}>
-          <Alert onClose={() => setSuccess(false)} severity="success" sx={{ width: '100%' }}>
-            File uploaded successfully!
-          </Alert>
-        </Snackbar>
+          <Snackbar open={success} autoHideDuration={6000} onClose={() => setSuccess(false)}>
+            <Alert onClose={() => setSuccess(false)} severity="success" sx={{ width: '100%' }}>
+              Graph uploaded successfully!
+            </Alert>
+          </Snackbar>
+        </Box>
+        
+        <Box sx={{ mt: 4, textAlign: 'center' }}>
+          <Typography variant="body2" color="text.secondary">
+            Upload your network graph file to analyze basic network metrics, community structure, and connected components.
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+            Supported formats: CSV, TXT, GML, GraphML, GEXF, Edgelist, Pajek
+          </Typography>
+        </Box>
       </Card>
     </Grow>
   );

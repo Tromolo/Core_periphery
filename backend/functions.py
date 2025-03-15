@@ -11,8 +11,11 @@ import pandas as pd
 from .BE import BE
 from .Holme import Holme
 from .rombach import Rombach
-from .Metrics import calculate_all_network_metrics, prepare_community_analysis_data
+from .Metrics import calculate_all_network_metrics, prepare_community_analysis_data, calculate_network_metrics, calculate_connected_components
 from .utils import draw, draw_interactive, save_visualization
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+import csv
 
 output_dir = "../static"
 if not os.path.exists(output_dir):
@@ -163,92 +166,315 @@ def export_to_gdf(graph, classifications, output_path):
         print(f"Error exporting to GDF: {str(e)}")
         return False
 
-def process_graph(graph: nx.Graph, algorithm: str = "rombach", **kwargs) -> Dict[str, Any]:
-    """Process graph with specified algorithm and calculate metrics."""
-    try:
-        if algorithm == "rombach":
-            c, x = process_graph_with_rombach(
-                graph, 
-                num_runs=kwargs.get('num_runs', 10),
-                alpha=kwargs.get('alpha', 0.3),
-                beta=kwargs.get('beta', 0.6)
-            )
+def get_core_stats(graph, classifications):
+    """Calculate core-periphery specific metrics."""
+    core_nodes = [i for i, val in enumerate(classifications) if val == 1]
+    periphery_nodes = [i for i, val in enumerate(classifications) if val == 0]
+    
+    return {
+        "core_size": len(core_nodes),
+        "periphery_size": len(periphery_nodes),
+        "core_percentage": len(core_nodes) / len(classifications) * 100 if classifications else 0
+    }
 
-            algorithm_params = {
-                "alpha": kwargs.get('alpha', 0.3),
-                "beta": kwargs.get('beta', 0.6),
-                "num_runs": kwargs.get('num_runs', 10)
-            }
-        elif algorithm == "be":
-            c, x = process_graph_with_be(
-                graph,
-                num_runs=kwargs.get('num_runs', 10)
-            )
-            algorithm_params = {
-                "num_runs": kwargs.get('num_runs', 10)
-            }
-        elif algorithm == "holme":
-            c, x = process_graph_with_holme(
-                graph,
-                num_iterations=kwargs.get('num_iterations', 100),
-                threshold=kwargs.get('threshold', 0.05)
-            )
-            algorithm_params = {
-                "num_iterations": kwargs.get('num_iterations', 100),
-                "threshold": kwargs.get('threshold', 0.05)
-            }
-        else:
-            raise ValueError(f"Unknown algorithm: {algorithm}")
-            
-        classifications = {node: "C" if c[node] == 1 else "P" for node in graph.nodes()}
-        
-        metrics = calculate_all_network_metrics(
-            graph, 
-            classifications, 
-            x,
-            algorithm=algorithm,
-            algorithm_params=algorithm_params
-        )
-        
-        # Use absolute path for output files
+def draw_static(graph, c, x):
+    """Generate a static image of the graph with core-periphery visualization."""
+    try:
+        # Create a unique filename
+        filename = f"{uuid.uuid4()}.png"
         current_dir = os.path.dirname(os.path.abspath(__file__))
         output_dir = os.path.abspath(os.path.join(current_dir, "..", "static"))
+        filepath = os.path.join(output_dir, filename)
         
-        output_csv = f"{uuid.uuid4()}.csv"
-        output_img = f"{uuid.uuid4()}.png"
-        output_gdf = f"{uuid.uuid4()}.gdf"
-
-        # Use absolute paths for saving files
-        csv_path = os.path.join(output_dir, output_csv)
-        img_path = os.path.join(output_dir, output_img)
-        gdf_path = os.path.join(output_dir, output_gdf)
+        # Create a figure
+        plt.figure(figsize=(10, 10))
         
-        print(f"Saving CSV to: {csv_path}")
-        classify_and_save_edges(graph, classifications, csv_path)
+        # Get node colors based on classifications
+        node_colors = ['red' if (c[i] if isinstance(c, list) else c.get(node, 0)) > 0.5 else 'blue' 
+                      for i, node in enumerate(graph.nodes())]
         
-        print(f"Saving GDF to: {gdf_path}")
-        export_to_gdf(graph, classifications, gdf_path)
+        # Draw the graph
+        pos = nx.spring_layout(graph)
+        nx.draw_networkx(
+            graph,
+            pos=pos,
+            node_color=node_colors,
+            node_size=100,
+            with_labels=False,
+            alpha=0.8
+        )
         
-        print(f"Saving visualization to: {img_path}")
-        save_visualization(graph, classifications, img_path, 
-                         title=f"Core-Periphery ({algorithm.capitalize()})")
+        # Add a legend
+        red_patch = mpatches.Patch(color='red', label='Core')
+        blue_patch = mpatches.Patch(color='blue', label='Periphery')
+        plt.legend(handles=[red_patch, blue_patch])
         
-        try:
-            interactive_plot = draw_interactive(graph, c, x)
-        except Exception:
-            interactive_plot = None
+        # Save the figure
+        plt.savefig(filepath)
+        plt.close()
         
-        community_data = prepare_community_analysis_data(graph)
-
-        return {
-            "classifications": classifications,
-            "csv_file": output_csv,
-            "gdf_file": output_gdf,
-            "image_file": output_img,
-            "interactive_plot": interactive_plot,
-            "metrics": metrics,
-            "community_data": community_data
-        }
-        
+        return filename
     except Exception as e:
-        raise Exception(f"Error processing graph: {str(e)}")
+        print(f"Error generating static image: {str(e)}")
+        return None
+
+def generate_csv(graph, c, x):
+    """Generate a CSV file with node and edge data."""
+    try:
+        # Create a unique filename
+        filename = f"{uuid.uuid4()}.csv"
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        output_dir = os.path.abspath(os.path.join(current_dir, "..", "static"))
+        filepath = os.path.join(output_dir, filename)
+        
+        # Create node classifications
+        classifications = {}
+        for i, node in enumerate(graph.nodes()):
+            coreness = c[i] if isinstance(c, list) else c.get(node, 0)
+            classifications[node] = "C" if coreness > 0.5 else "P"
+        
+        # Write to CSV
+        with open(filepath, 'w', newline='') as csvfile:
+            writer = csv.writer(csvfile)
+            writer.writerow(['source', 'target', 'type'])
+            
+            for u, v in graph.edges():
+                edge_type = f"{classifications[u]}-{classifications[v]}"
+                writer.writerow([u, v, edge_type])
+        
+        return filename
+    except Exception as e:
+        print(f"Error generating CSV file: {str(e)}")
+        return None
+
+def generate_gdf(graph, c, x):
+    """Generate a GDF file with node and edge data."""
+    try:
+        # Create a unique filename
+        filename = f"{uuid.uuid4()}.gdf"
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        output_dir = os.path.abspath(os.path.join(current_dir, "..", "static"))
+        filepath = os.path.join(output_dir, filename)
+        
+        # Create node classifications
+        classifications = {}
+        for i, node in enumerate(graph.nodes()):
+            coreness = c[i] if isinstance(c, list) else c.get(node, 0)
+            classifications[node] = "C" if coreness > 0.5 else "P"
+        
+        # Write to GDF
+        with open(filepath, 'w') as f:
+            # Write node definitions
+            f.write("nodedef>name VARCHAR,label VARCHAR,type VARCHAR,coreness DOUBLE\n")
+            for node in graph.nodes():
+                coreness = c[node] if isinstance(c, dict) else c[list(graph.nodes()).index(node)]
+                f.write(f"{node},{node},{classifications[node]},{coreness}\n")
+            
+            # Write edge definitions
+            f.write("edgedef>node1 VARCHAR,node2 VARCHAR,type VARCHAR\n")
+            for u, v in graph.edges():
+                edge_type = f"{classifications[u]}-{classifications[v]}"
+                f.write(f"{u},{v},{edge_type}\n")
+        
+        return filename
+    except Exception as e:
+        print(f"Error generating GDF file: {str(e)}")
+        return None
+
+def get_top_nodes(graph, c):
+    """Get the top nodes based on coreness values."""
+    top_nodes = []
+    betweenness = nx.betweenness_centrality(graph)
+    
+    # Calculate the threshold for core classification
+    # Use the median coreness value as a threshold
+    if isinstance(c, list):
+        coreness_values = c
+    else:
+        coreness_values = list(c.values())
+    
+    # Use 0.5 as default threshold, but if all values are below 0.5,
+    # use the median value to ensure we have some core nodes
+    threshold = 0.5
+    if max(coreness_values) < threshold:
+        threshold = sorted(coreness_values)[len(coreness_values) // 2]
+    
+    print(f"Using coreness threshold of {threshold} for core-periphery classification")
+    
+    for i, node in enumerate(graph.nodes()):
+        coreness = c[i] if isinstance(c, list) else c.get(node, 0)
+        top_nodes.append({
+            "id": node,
+            "type": "C" if coreness > threshold else "P",
+            "coreness": float(coreness),
+            "betweenness": betweenness[node],
+            "degree": graph.degree(node)
+        })
+    
+    top_nodes.sort(key=lambda x: x["coreness"], reverse=True)
+    return top_nodes[:5]
+
+def get_algorithm_function(algorithm):
+    """Return the appropriate algorithm function based on the algorithm name."""
+    if algorithm == "rombach":
+        return lambda graph, **params: process_graph_with_rombach(
+            graph, 
+            num_runs=params.get('num_runs', 10),
+            alpha=params.get('alpha', 0.3),
+            beta=params.get('beta', 0.6)
+        )
+    elif algorithm == "be":
+        return lambda graph, **params: process_graph_with_be(
+            graph,
+            num_runs=params.get('num_runs', 10)
+        )
+    elif algorithm == "holme":
+        return lambda graph, **params: process_graph_with_holme(
+            graph,
+            num_iterations=params.get('num_iterations', 100),
+            threshold=params.get('threshold', 0.05)
+        )
+    else:
+        raise ValueError(f"Unknown algorithm: {algorithm}")
+
+def process_graph(graph, algorithm=None, params=None):
+    """Process a graph with the specified algorithm and parameters."""
+    try:
+        # Get the algorithm function
+        if algorithm:
+            algorithm_func = get_algorithm_function(algorithm)
+            
+            # Process the graph with the algorithm
+            if params:
+                classifications, coreness = algorithm_func(graph, **params)
+            else:
+                classifications, coreness = algorithm_func(graph)
+                
+            # Convert classifications to a list for JSON serialization
+            if isinstance(classifications, dict):
+                classifications_list = [classifications.get(node, 0) for node in graph.nodes()]
+            else:
+                classifications_list = classifications
+                
+            # Convert coreness to a list for JSON serialization
+            if isinstance(coreness, dict):
+                coreness_list = [coreness.get(node, 0) for node in graph.nodes()]
+            else:
+                coreness_list = coreness
+                
+            # Get core statistics
+            core_stats = get_core_stats(graph, classifications)
+            
+            # Generate CSV file
+            csv_file = generate_csv(graph, classifications, coreness)
+            
+            # Generate GDF file
+            gdf_file = generate_gdf(graph, classifications, coreness)
+            
+            # Generate static image
+            image_file = draw_static(graph, classifications, coreness)
+            
+            # Calculate network metrics
+            network_metrics = calculate_all_network_metrics(graph, classifications, coreness, algorithm, params)
+            
+            # Get top nodes
+            top_nodes = get_top_nodes(graph, coreness)
+            
+            # Prepare algorithm parameters
+            algorithm_params = {}
+            if algorithm == "rombach":
+                algorithm_params = {
+                    "alpha": params.get('alpha', 0.3),
+                    "beta": params.get('beta', 0.6),
+                    "num_runs": params.get('num_runs', 10)
+                }
+            elif algorithm == "holme":
+                algorithm_params = {
+                    "num_iterations": params.get('num_iterations', 100),
+                    "threshold": params.get('threshold', 0.05)
+                }
+            elif algorithm == "be":
+                algorithm_params = {
+                    "num_runs": params.get('num_runs', 10)
+                }
+                
+            # Count core and periphery nodes
+            core_count = sum(1 for node_type in classifications_list if node_type == 'C' or node_type == 1)
+            periphery_count = len(classifications_list) - core_count
+            print(f"Classification distribution: {core_count} core nodes, {periphery_count} periphery nodes")
+            
+            # Prepare graph data for visualization
+            graph_data = {
+                "nodes": [],
+                "edges": []
+            }
+            
+            # Calculate additional node metrics for visualization
+            try:
+                import networkx as nx
+                degrees = dict(graph.degree())
+                betweenness = nx.betweenness_centrality(graph)
+                closeness = nx.closeness_centrality(graph)
+            except Exception as e:
+                print(f"Error calculating additional metrics: {str(e)}")
+                degrees = {node: len(list(graph.neighbors(node))) for node in graph.nodes()}
+                betweenness = {node: 0.0 for node in graph.nodes()}
+                closeness = {node: 0.0 for node in graph.nodes()}
+            
+            # Add nodes
+            for i, node in enumerate(graph.nodes()):
+                node_type = classifications_list[i]
+                if isinstance(node_type, int):
+                    node_type = "C" if node_type == 1 else "P"
+                    
+                coreness_value = coreness_list[i]
+                
+                graph_data["nodes"].append({
+                    "id": str(node),
+                    "type": node_type,
+                    "coreness": float(coreness_value),
+                    "degree": degrees.get(node, 0),
+                    "betweenness": betweenness.get(node, 0.0),
+                    "closeness": closeness.get(node, 0.0)
+                })
+                
+            # Add edges
+            for edge in graph.edges():
+                source, target = edge
+                # Get edge data if available
+                edge_data = graph.get_edge_data(source, target) or {}
+                weight = edge_data.get('weight', 1.0)
+                
+                graph_data["edges"].append({
+                    "id": f"{source}-{target}",
+                    "source": str(source),
+                    "target": str(target),
+                    "weight": float(weight)
+                })
+                
+            return {
+                "classifications": classifications_list,
+                "network_metrics": network_metrics,
+                "core_stats": core_stats,
+                "algorithm_params": algorithm_params,
+                "top_nodes": top_nodes,
+                "csv_file": csv_file,
+                "gdf_file": gdf_file,
+                "image_file": image_file,
+                "graph_data": graph_data
+            }
+        else:
+            # Only calculate network metrics and community data
+            network_metrics = calculate_network_metrics(graph)
+            community_data = prepare_community_analysis_data(graph)
+            
+            return {
+                "network_metrics": network_metrics,
+                "community_data": community_data
+            }
+            
+    except Exception as e:
+        print(f"Error processing graph: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise e
