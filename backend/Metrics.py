@@ -9,31 +9,6 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, Any, Optional
 from collections import Counter
 
-def calculate_average_path_length(G):
-    try:
-        largest_component = max(nx.connected_components(G), key=len)
-        subgraph = G.subgraph(largest_component)
-        return round(nx.average_shortest_path_length(subgraph), 2)
-    except Exception:
-        return "N/A"
-
-
-def calculate_diameter(G):
-    try:
-        largest_component = max(nx.connected_components(G), key=len)
-        subgraph = G.subgraph(largest_component)
-        return nx.diameter(subgraph)
-    except Exception:
-        return "N/A"
-
-
-def calculate_edge_density(G):
-    return round(nx.density(G), 2)
-
-
-def calculate_assortativity_coefficient(G):
-    return round(nx.degree_assortativity_coefficient(G), 2)
-
 
 def calculate_betweenness_distribution(G):
     betweenness = nx.betweenness_centrality(G)
@@ -81,19 +56,6 @@ def calculate_network_metrics(graph: nx.Graph) -> Dict[str, Any]:
                 'clustering': executor.submit(nx.average_clustering, graph),
                 'degree_dist': executor.submit(lambda: [d for n, d in graph.degree()]),
             }
-            
-            # Path-based metrics
-            try:
-                largest_component = max(nx.connected_components(graph), key=len)
-                subgraph = graph.subgraph(largest_component)
-                futures['avg_path_length'] = executor.submit(nx.average_shortest_path_length, subgraph)
-                futures['diameter'] = executor.submit(nx.diameter, subgraph)
-            except:
-                futures['avg_path_length'] = None
-                futures['diameter'] = None
-            
-            # Removed modularity calculation here as it's handled in community analysis
-            # This avoids duplicate calculation
             
             # Assortativity
             try:
@@ -173,14 +135,7 @@ def calculate_all_network_metrics(graph: nx.Graph, classifications: Dict, corene
             "clustering": nx.average_clustering(graph),
         }
         
-        # Try to calculate metrics that might fail for disconnected graphs
-        try:
-            metrics["avg_path_length"] = nx.average_shortest_path_length(graph)
-            metrics["diameter"] = nx.diameter(graph)
-        except nx.NetworkXError:
-            metrics["avg_path_length"] = None
-            metrics["diameter"] = None
-            
+        # Assortativity calculation
         try:
             metrics["assortativity"] = nx.degree_assortativity_coefficient(graph)
         except:
@@ -248,19 +203,31 @@ def calculate_all_network_metrics(graph: nx.Graph, classifications: Dict, corene
             }
 
         # Top nodes information is still valuable
-        top_nodes = []
+        core_nodes = []
+        periphery_nodes = []
         betweenness = nx.betweenness_centrality(graph)
         for node in graph.nodes():
-            top_nodes.append({
+            node_data = {
                 "id": node,
                 "type": classifications[node],
                 "coreness": coreness[node],
                 "betweenness": betweenness[node],
                 "degree": graph.degree(node)
-            })
+            }
+            if classifications[node] == 'C':
+                core_nodes.append(node_data)
+            else:
+                periphery_nodes.append(node_data)
         
-        top_nodes.sort(key=lambda x: x["coreness"], reverse=True)
-        metrics["top_nodes"] = top_nodes[:5]
+        # Sort core nodes by highest coreness
+        core_nodes.sort(key=lambda x: x["coreness"], reverse=True)
+        # Sort periphery nodes by lowest coreness
+        periphery_nodes.sort(key=lambda x: x["coreness"])
+        
+        metrics["top_nodes"] = {
+            "top_core_nodes": core_nodes[:5],
+            "top_periphery_nodes": periphery_nodes[:5]
+        }
 
         # Connected components analysis is still valuable
         metrics["connected_components"] = calculate_connected_components(graph)

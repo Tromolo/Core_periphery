@@ -13,7 +13,7 @@ import {
   IconButton,
   Tooltip
 } from "@mui/material";
-import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, Legend, CartesianGrid, Cell } from "recharts";
 import Sigma from "sigma";
 import Graph from "graphology";
 import DownloadIcon from '@mui/icons-material/Download';
@@ -51,15 +51,19 @@ const CommunityAnalysis = ({ communityData }) => {
     graph_data
   } = communityData;
 
-  // Colors for the pie chart and graph visualization
+  // Colors for the communities and graph visualization
   const COLORS = ['#1a237e', '#303f9f', '#3f51b5', '#5c6bc0', '#7986cb', '#9fa8da', 
                  '#7e57c2', '#5e35b1', '#3949ab', '#1e88e5', '#039be5', '#00acc1'];
 
-  // Prepare data for pie chart
-  const pieData = size_distribution.map(item => ({
+  // Prepare data for histogram
+  const histogramData = size_distribution.map((item, index) => ({
     name: `Community ${item.community}`,
-    value: item.size
+    size: item.size,
+    color: COLORS[index % COLORS.length]
   }));
+
+  // Sort histogram data by size (descending)
+  histogramData.sort((a, b) => b.size - a.size);
 
   // Monitor container size changes
   useLayoutEffect(() => {
@@ -341,8 +345,8 @@ const CommunityAnalysis = ({ communityData }) => {
       </Typography>
 
       <Grid container spacing={4}>
-        {/* Community Statistics Card */}
-        <Grid item xs={12} md={6}>
+        {/* Community Statistics Card - Now Full Width */}
+        <Grid item xs={12}>
           <Card elevation={0} sx={{ height: '100%', borderRadius: 4, boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)' }}>
             <CardContent>
               <Typography variant="h6" gutterBottom>Community Statistics</Typography>
@@ -389,31 +393,47 @@ const CommunityAnalysis = ({ communityData }) => {
           </Card>
         </Grid>
         
-        {/* Pie Chart Card */}
-        <Grid item xs={12} md={6}>
-          <Card elevation={0} sx={{ height: '100%', borderRadius: 4, boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)' }}>
+        {/* Community Size Histogram - Full Width */}
+        <Grid item xs={12}>
+          <Card elevation={0} sx={{ borderRadius: 4, boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)' }}>
             <CardContent>
-              <Typography variant="h6" gutterBottom>Community Size Distribution</Typography>
+              <Typography variant="h6" gutterBottom>Community Size Histogram</Typography>
               <Divider sx={{ mb: 3 }} />
               
               <ResponsiveContainer width="100%" height={300}>
-                <PieChart>
-                  <Pie
-                    data={pieData}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    outerRadius={100}
-                    fill="#8884d8"
-                    dataKey="value"
-                    label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                <BarChart
+                  data={histogramData}
+                  margin={{
+                    top: 5,
+                    right: 30,
+                    left: 20,
+                    bottom: 5,
+                  }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis
+                    dataKey="name"
+                    tick={{ fill: '#333' }}
+                    label={{ value: 'Community', position: 'insideBottom', offset: -5 }}
+                  />
+                  <YAxis
+                    tick={{ fill: '#333' }}
+                    label={{ value: 'Size', angle: -90, position: 'insideLeft' }}
+                  />
+                  <RechartsTooltip
+                    formatter={(value, name) => [`${value} nodes`, 'Size']}
+                    labelFormatter={(value) => `${value}`}
+                  />
+                  <Legend />
+                  <Bar 
+                    dataKey="size" 
+                    name="Community Size"
                   >
-                    {pieData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    {histogramData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
                     ))}
-                  </Pie>
-                  <Tooltip formatter={(value) => [`Size: ${value}`, 'Community']} />
-                </PieChart>
+                  </Bar>
+                </BarChart>                                                                                                       
               </ResponsiveContainer>
             </CardContent>
           </Card>

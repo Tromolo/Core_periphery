@@ -485,7 +485,11 @@ function App() {
 
           <Grid container spacing={4} sx={{ mb: 4 }}>
             <Grid item xs={12}>
-              <GraphStats graphData={graphData} metrics={networkMetrics} />
+              <GraphStats 
+                graphData={graphData} 
+                metrics={networkMetrics} 
+                communityData={communityData}
+              />
             </Grid>
           </Grid>
 

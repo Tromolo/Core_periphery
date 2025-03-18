@@ -434,7 +434,8 @@ def generate_gdf(graph, c, x):
 
 def get_top_nodes(graph, c):
     """Get the top nodes based on coreness values."""
-    top_nodes = []
+    top_core_nodes = []
+    top_periphery_nodes = []
     betweenness = nx.betweenness_centrality(graph)
     
     # Calculate the threshold for core classification
@@ -452,18 +453,34 @@ def get_top_nodes(graph, c):
     
     print(f"Using coreness threshold of {threshold} for core-periphery classification")
     
+    all_nodes = []
     for i, node in enumerate(graph.nodes()):
         coreness = c[i] if isinstance(c, list) else c.get(node, 0)
-        top_nodes.append({
+        node_data = {
             "id": node,
             "type": "C" if coreness > threshold else "P",
             "coreness": float(coreness),
             "betweenness": betweenness[node],
             "degree": graph.degree(node)
-        })
+        }
+        all_nodes.append(node_data)
     
-    top_nodes.sort(key=lambda x: x["coreness"], reverse=True)
-    return top_nodes[:5]
+    # Sort and separate core and periphery nodes
+    core_nodes = [node for node in all_nodes if node["type"] == "C"]
+    periphery_nodes = [node for node in all_nodes if node["type"] == "P"]
+    
+    # Sort core nodes by highest coreness
+    core_nodes.sort(key=lambda x: x["coreness"], reverse=True)
+    top_core_nodes = core_nodes[:5]
+    
+    # Sort periphery nodes by lowest coreness (most peripheral)
+    periphery_nodes.sort(key=lambda x: x["coreness"])
+    top_periphery_nodes = periphery_nodes[:5]
+    
+    return {
+        "top_core_nodes": top_core_nodes,
+        "top_periphery_nodes": top_periphery_nodes
+    }
 
 def get_algorithm_function(algorithm):
     """Return the appropriate algorithm function based on the algorithm name."""
@@ -529,7 +546,9 @@ def process_graph(graph, algorithm=None, params=None):
             network_metrics = calculate_all_network_metrics(graph, classifications, coreness, algorithm, params)
             
             # Get top nodes
-            top_nodes = get_top_nodes(graph, coreness)
+            top_nodes_result = get_top_nodes(graph, coreness)
+            top_core_nodes = top_nodes_result["top_core_nodes"]
+            top_periphery_nodes = top_nodes_result["top_periphery_nodes"]
             
             # Prepare algorithm parameters
             algorithm_params = {}
@@ -609,20 +628,91 @@ def process_graph(graph, algorithm=None, params=None):
                 "network_metrics": network_metrics,
                 "core_stats": core_stats,
                 "algorithm_params": algorithm_params,
-                "top_nodes": top_nodes,
+                "top_nodes": top_nodes_result,
                 "csv_file": csv_file,
                 "gdf_file": gdf_file,
                 "image_file": image_file,
                 "graph_data": graph_data
             }
         else:
-            # Only calculate network metrics and community data
+            # Only calculate network metrics and community data, but also provide a basic 
+            # core-periphery classification based on node degree
             network_metrics = calculate_network_metrics(graph)
             community_data = prepare_community_analysis_data(graph)
             
+            # Create a simple degree-based classification
+            degrees = dict(graph.degree())
+            
+            # Calculate the threshold (e.g., median degree)
+            degree_values = list(degrees.values())
+            degree_threshold = sorted(degree_values)[len(degree_values) // 2] if degree_values else 0
+            
+            # Create classifications based on node degree
+            classifications = {}
+            for node, degree in degrees.items():
+                classifications[node] = 'C' if degree > degree_threshold else 'P'
+                
+            # Create coreness values based on normalized degree
+            max_degree = max(degree_values) if degree_values else 1
+            coreness = {node: degree / max_degree for node, degree in degrees.items()}
+            
+            # Prepare graph data for visualization
+            graph_data = {
+                "nodes": [],
+                "edges": []
+            }
+            
+            # Calculate additional node metrics
+            try:
+                betweenness = nx.betweenness_centrality(graph)
+                closeness = nx.closeness_centrality(graph)
+            except Exception as e:
+                print(f"Error calculating additional metrics: {str(e)}")
+                betweenness = {node: 0.0 for node in graph.nodes()}
+                closeness = {node: 0.0 for node in graph.nodes()}
+            
+            # Add nodes with core-periphery classification
+            for node in graph.nodes():
+                node_degree = degrees.get(node, 0)
+                node_type = classifications[node]
+                coreness_value = coreness[node]
+                
+                graph_data["nodes"].append({
+                    "id": str(node),
+                    "type": node_type,
+                    "coreness": float(coreness_value),
+                    "degree": node_degree,
+                    "betweenness": betweenness.get(node, 0.0),
+                    "closeness": closeness.get(node, 0.0)
+                })
+                
+            # Add edges
+            for edge in graph.edges():
+                source, target = edge
+                # Get edge data if available
+                edge_data = graph.get_edge_data(source, target) or {}
+                weight = edge_data.get('weight', 1.0)
+                
+                graph_data["edges"].append({
+                    "id": f"{source}-{target}",
+                    "source": str(source),
+                    "target": str(target),
+                    "weight": float(weight)
+                })
+            
+            # Generate core stats
+            core_stats = get_core_stats(graph, classifications)
+            
+            # Count core and periphery nodes
+            core_count = sum(1 for node_type in classifications.values() if node_type == 'C')
+            periphery_count = len(classifications) - core_count
+            print(f"Basic classification: {core_count} core nodes, {periphery_count} periphery nodes based on degree")
+            
             return {
                 "network_metrics": network_metrics,
-                "community_data": community_data
+                "community_data": community_data,
+                "graph_data": graph_data,
+                "core_stats": core_stats
             }
             
     except Exception as e:

@@ -70,6 +70,34 @@ const MetricsTable = ({ metrics }) => {
           <Typography variant="h6" sx={{ mb: 2, mt: 4 }}>
             Top Nodes by Coreness
           </Typography>
+          <TableContainer component={Paper} sx={{ boxShadow: 'none', mb: 4 }}>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell sx={{ fontWeight: 'bold' }}>Node ID</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }}>Type</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }}>Coreness</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }}>Betweenness</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }}>Degree</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {metrics.top_nodes && metrics.top_nodes.top_core_nodes && metrics.top_nodes.top_core_nodes.map((node) => (
+                  <TableRow key={node.id}>
+                    <TableCell>{node.id}</TableCell>
+                    <TableCell>{node.type}</TableCell>
+                    <TableCell>{node.coreness.toFixed(4)}</TableCell>
+                    <TableCell>{node.betweenness.toFixed(4)}</TableCell>
+                    <TableCell>{node.degree}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+
+          <Typography variant="h6" sx={{ mb: 2, mt: 4 }}>
+            Top Nodes by Peripheriness
+          </Typography>
           <TableContainer component={Paper} sx={{ boxShadow: 'none' }}>
             <Table>
               <TableHead>
@@ -82,7 +110,7 @@ const MetricsTable = ({ metrics }) => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {metrics.top_nodes && metrics.top_nodes.map((node) => (
+                {metrics.top_nodes && metrics.top_nodes.top_periphery_nodes && metrics.top_nodes.top_periphery_nodes.map((node) => (
                   <TableRow key={node.id}>
                     <TableCell>{node.id}</TableCell>
                     <TableCell>{node.type}</TableCell>

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   Card, 
   CardContent, 
@@ -9,7 +9,9 @@ import {
   LinearProgress,
   useTheme,
   Grow,
-  Stack
+  Stack,
+  Button,
+  Tooltip
 } from '@mui/material';
 import { 
   Timeline, 
@@ -17,8 +19,91 @@ import {
   Share, 
   AccountTree,
   TrendingUp,
-  Lan
+  Lan,
+  Download
 } from '@mui/icons-material';
+
+// Helper function to convert data to CSV
+const generateCSV = (graphData, metrics, communityData) => {
+  // First, determine which data source to use
+  let nodes = [];
+  if (graphData && graphData.nodes && graphData.nodes.length > 0) {
+    nodes = graphData.nodes;
+  } else if (communityData && communityData.graph_data && communityData.graph_data.nodes) {
+    nodes = communityData.graph_data.nodes;
+  }
+  
+  if (nodes.length === 0) {
+    console.warn("No node data available for CSV export");
+    return null;
+  }
+
+  // Define CSV columns - removed X and Y coordinates
+  const headers = ['Node ID', 'Degree', 'Community'];
+  
+  // Create header row
+  let csvContent = headers.join(',') + '\n';
+  
+  // Get community data mapping if available
+  const communityMapping = communityData?.community_membership || {};
+  
+  // Add each node data
+  nodes.forEach(node => {
+    const nodeId = node.id || '';
+    const degree = node.degree !== undefined ? node.degree : 0;
+    const community = communityMapping[nodeId] !== undefined ? communityMapping[nodeId] : '';
+    
+    const row = [
+      nodeId, 
+      degree, 
+      community
+    ].join(',');
+    
+    csvContent += row + '\n';
+  });
+  
+  return csvContent;
+};
+
+// Function to trigger CSV download
+const downloadCSV = (graphData, metrics, communityData) => {
+  try {
+    const csvContent = generateCSV(graphData, metrics, communityData);
+    
+    if (!csvContent) {
+      console.error("Failed to generate CSV: No data available");
+      alert("No node data available for export");
+      return;
+    }
+    
+    // Create a blob and download link
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    
+    // Set filename with timestamp to avoid overwriting
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const filename = `network_node_data_${timestamp}.csv`;
+    
+    // Set up and trigger the download
+    link.setAttribute('href', url);
+    link.setAttribute('download', filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    // Clean up the URL object
+    setTimeout(() => {
+      URL.revokeObjectURL(url);
+    }, 100);
+    
+    console.log(`CSV export successful: ${filename}`);
+  } catch (error) {
+    console.error("Error during CSV export:", error);
+    alert("Failed to export data: " + error.message);
+  }
+};
 
 const StatCard = ({ label, value, icon, color }) => (
   <Box
@@ -40,7 +125,9 @@ const StatCard = ({ label, value, icon, color }) => (
         {label}
       </Typography>
       <Typography variant="h6" sx={{ fontWeight: 600, color }}>
-        {typeof value === 'number' ? value.toFixed(3) : value || '0'}
+        {label === "Total Nodes" || label === "Total Edges" 
+          ? parseInt(value || 0)
+          : (typeof value === 'number' ? value.toFixed(3) : value || '0')}
       </Typography>
     </Box>
   </Box>
@@ -106,21 +193,52 @@ const NodeCard = ({ node, index }) => {
   );
 };
 
-const GraphStats = ({ graphData, metrics }) => {
+const GraphStats = ({ graphData, metrics, communityData }) => {
   if (!metrics) return null;
-
   const theme = useTheme();
+  const [exportSuccess, setExportSuccess] = useState(false);
+  
+  const handleDownload = () => {
+    try {
+      downloadCSV(graphData, metrics, communityData);
+      setExportSuccess(true);
+      // Reset the success message after 3 seconds
+      setTimeout(() => setExportSuccess(false), 3000);
+    } catch (error) {
+      console.error("Error handling download:", error);
+    }
+  };
 
   return (
     <Card sx={{ p: 4, boxShadow: 3, borderRadius: 2 }}>
       <CardContent>
         <Stack spacing={3}>
-          <Typography variant="h6" sx={{ 
-            fontWeight: 600,
-            color: theme.palette.primary.main 
-          }}>
-            Network Statistics
-          </Typography>
+          <Box display="flex" justifyContent="space-between" alignItems="center">
+            <Typography variant="h6" sx={{ 
+              fontWeight: 600,
+              color: theme.palette.primary.main 
+            }}>
+              Network Statistics
+            </Typography>
+            
+            <Tooltip title="Export node data including ID, degree, and community membership">
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<Download />}
+                onClick={handleDownload}
+                sx={{ 
+                  borderRadius: 2,
+                  bgcolor: exportSuccess ? 'success.light' : 'transparent',
+                  '&:hover': {
+                    bgcolor: exportSuccess ? 'success.light' : 'rgba(25, 118, 210, 0.04)'
+                  }
+                }}
+              >
+                {exportSuccess ? 'Downloaded!' : 'Export Node Data (CSV)'}
+              </Button>
+            </Tooltip>
+          </Box>
           
           <Grid container spacing={2}>
             <Grid item xs={12} sm={6}>
@@ -142,7 +260,7 @@ const GraphStats = ({ graphData, metrics }) => {
             <Grid item xs={12} sm={6}>
               <StatCard 
                 label="Density" 
-                value={metrics.density?.toFixed(4)}
+                value={metrics.density}
                 icon={<Share />}
                 color={theme.palette.primary.main}
               />
@@ -150,23 +268,7 @@ const GraphStats = ({ graphData, metrics }) => {
             <Grid item xs={12} sm={6}>
               <StatCard 
                 label="Clustering" 
-                value={metrics.clustering?.toFixed(4)}
-                icon={<AccountTree />}
-                color={theme.palette.primary.main}
-              />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <StatCard 
-                label="Avg Path Length" 
-                value={metrics.avg_path_length?.toFixed(4)}
-                icon={<Timeline />}
-                color={theme.palette.primary.main}
-              />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <StatCard 
-                label="Diameter" 
-                value={metrics.diameter}
+                value={metrics.clustering}
                 icon={<AccountTree />}
                 color={theme.palette.primary.main}
               />
@@ -174,7 +276,7 @@ const GraphStats = ({ graphData, metrics }) => {
             <Grid item xs={12} sm={6}>
               <StatCard 
                 label="Assortativity" 
-                value={metrics.assortativity?.toFixed(4)}
+                value={metrics.assortativity}
                 icon={<Share />}
                 color={theme.palette.primary.main}
               />

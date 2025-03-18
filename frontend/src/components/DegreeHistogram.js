@@ -306,33 +306,9 @@ const DegreeHistogram = ({ graphData, communityData }) => {
       
       <Box sx={{ mb: 3 }}>
         <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'bold' }}>
-          Network Statistics
+          Degree Statistics
         </Typography>
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-          <Box>
-            <Typography variant="body2" color="text.secondary">
-              Total Nodes:
-            </Typography>
-            <Typography variant="body1" fontWeight="bold">
-              {basicStats.nodes || 0}
-            </Typography>
-          </Box>
-          <Box>
-            <Typography variant="body2" color="text.secondary">
-              Total Edges:
-            </Typography>
-            <Typography variant="body1" fontWeight="bold">
-              {basicStats.edges || 0}
-            </Typography>
-          </Box>
-          <Box>
-            <Typography variant="body2" color="text.secondary">
-              Network Density:
-            </Typography>
-            <Typography variant="body1" fontWeight="bold">
-              {basicStats.density || 0}
-            </Typography>
-          </Box>
           <Box>
             <Typography variant="body2" color="text.secondary">
               Avg. Degree:

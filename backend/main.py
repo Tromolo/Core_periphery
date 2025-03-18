@@ -74,7 +74,7 @@ async def upload_graph(file: UploadFile = File(...)):
 
         try:
             print("Calculating network metrics...")
-            # Only calculate network metrics and community data, no algorithm processing
+            # Calculate network metrics, community data, and basic core-periphery stats
             results = process_graph(global_graph)
             print("Network metrics calculated successfully")
         except Exception as e:
@@ -85,7 +85,9 @@ async def upload_graph(file: UploadFile = File(...)):
             content={
                 "message": "Graph uploaded and network metrics calculated successfully",
                 "network_metrics": results["network_metrics"],
-                "community_data": results["community_data"]
+                "community_data": results["community_data"],
+                "graph_data": results["graph_data"],
+                "core_stats": results["core_stats"]
             }
         )
         
