@@ -15,7 +15,7 @@ import Sigma from "sigma";
 import Graph from "graphology";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
 
-const GraphVisualizer = ({ graphData, metrics, csvFile, imageFile, gdfFile }) => {
+const GraphVisualizer = ({ graphData, metrics, nodeCsvFile, edgeCsvFile, imageFile, gdfFile }) => {
   const theme = useTheme();
   const containerRef = useRef(null);
   const sigmaInstanceRef = useRef(null);
@@ -26,9 +26,10 @@ const GraphVisualizer = ({ graphData, metrics, csvFile, imageFile, gdfFile }) =>
   const mountedRef = useRef(true);
 
   // Handle downloads
-  const handleDownloadCSV = () => csvFile && window.open(`http://localhost:8080/static/${csvFile}`, '_blank');
-  const handleDownloadImage = () => imageFile && window.open(`http://localhost:8080/static/${imageFile}`, '_blank');
-  const handleDownloadGDF = () => gdfFile && window.open(`http://localhost:8080/static/${gdfFile}`, '_blank');
+  const handleDownloadNodeCSV = () => nodeCsvFile && window.open(`http://localhost:8080/download/${nodeCsvFile}`, '_blank');
+  const handleDownloadEdgeCSV = () => edgeCsvFile && window.open(`http://localhost:8080/download/${edgeCsvFile}`, '_blank');
+  const handleDownloadImage = () => imageFile && window.open(`http://localhost:8080/download/${imageFile}`, '_blank');
+  const handleDownloadGDF = () => gdfFile && window.open(`http://localhost:8080/download/${gdfFile}`, '_blank');
 
   // Set mounted flag to false when component unmounts
   useEffect(() => {
@@ -192,10 +193,19 @@ const GraphVisualizer = ({ graphData, metrics, csvFile, imageFile, gdfFile }) =>
             variant="outlined" 
             size="small"
             startIcon={<DownloadIcon />}
-            onClick={handleDownloadCSV}
-            disabled={!csvFile}
+            onClick={handleDownloadNodeCSV}
+            disabled={!nodeCsvFile}
           >
-            CSV
+            Nodes Data
+          </Button>
+          <Button 
+            variant="outlined" 
+            size="small"
+            startIcon={<DownloadIcon />}
+            onClick={handleDownloadEdgeCSV}
+            disabled={!edgeCsvFile}
+          >
+            Edges Data
           </Button>
           <Button 
             variant="outlined" 
@@ -604,50 +614,41 @@ const MetricCard = ({ title, value, icon, tooltip }) => {
 
 // Helper functions to get core and periphery counts with fallbacks
 const getCoreCount = (metrics, graphData) => {
-  // Log the values we're working with
-  console.log("Getting core count:", { 
-    metricsValue: metrics?.core_stats?.core_size,
-    graphDataLength: graphData?.nodes?.length,
-    coreNodesInGraphData: graphData?.nodes ? graphData.nodes.filter(node => node.type === 'C').length : 'N/A'
-  });
-  
-  // Always calculate from graphData since metrics.core_stats values are incorrect
-  if (graphData?.nodes) {
-    return graphData.nodes.filter(node => node.type === 'C').length;
-  }
-  
-  // Fallback to metrics if graphData is not available
+  // First check if metrics has core_stats.core_size
   if (metrics?.core_stats?.core_size !== undefined) {
     return metrics.core_stats.core_size;
+  }
+  
+  // Fallback to calculating from graphData if metrics not available
+  if (graphData?.nodes) {
+    return graphData.nodes.filter(node => node.type === 'C').length;
   }
   
   return 0;
 };
 
 const getPeripheryCount = (metrics, graphData) => {
-  // Log the values we're working with
-  console.log("Getting periphery count:", { 
-    metricsValue: metrics?.core_stats?.periphery_size,
-    graphDataLength: graphData?.nodes?.length,
-    peripheryNodesInGraphData: graphData?.nodes ? graphData.nodes.filter(node => node.type === 'P').length : 'N/A'
-  });
-  
-  // Always calculate from graphData since metrics.core_stats values are incorrect
-  if (graphData?.nodes) {
-    return graphData.nodes.filter(node => node.type === 'P').length;
-  }
-  
-  // Fallback to metrics if graphData is not available
+  // First check if metrics has core_stats.periphery_size
   if (metrics?.core_stats?.periphery_size !== undefined) {
     return metrics.core_stats.periphery_size;
+  }
+  
+  // Fallback to calculating from graphData if metrics not available
+  if (graphData?.nodes) {
+    return graphData.nodes.filter(node => node.type === 'P').length;
   }
   
   return 0;
 };
 
-// Add new helper function for Core Percentage with proper calculation using graphData
+// Get Core Percentage from metrics when available
 const getCorePercentage = (metrics, graphData) => {
-  // Calculate from graphData if available
+  // First check if metrics has core_stats.core_percentage
+  if (metrics?.core_stats?.core_percentage !== undefined) {
+    return `${metrics.core_stats.core_percentage.toFixed(1)}%`;
+  }
+  
+  // Fallback to calculating from graphData if metrics not available
   if (graphData?.nodes) {
     const totalNodes = graphData.nodes.length;
     const coreNodes = graphData.nodes.filter(node => node.type === 'C').length;
@@ -658,22 +659,17 @@ const getCorePercentage = (metrics, graphData) => {
     }
   }
   
-  // Fallback to metrics if graphData is not available and metrics contain core_percentage
-  if (metrics?.core_stats?.core_percentage !== undefined) {
-    return `${metrics.core_stats.core_percentage.toFixed(1)}%`;
-  }
-  
   return '0.0%';
 };
 
-// Add new helper functions for additional metrics
+// Get Core Density from metrics when available
 const getCoreDensity = (metrics, graphData) => {
-  // Check if metrics has core_periphery_metrics with core_density
+  // First check if metrics has core_periphery_metrics.core_density
   if (metrics?.core_periphery_metrics?.core_density !== undefined) {
     return metrics.core_periphery_metrics.core_density.toFixed(2);
   }
   
-  // Calculate from graphData if available (fallback)
+  // Fallback to calculating from graphData if metrics not available
   if (graphData?.nodes && graphData?.edges) {
     const coreNodes = graphData.nodes.filter(node => node.type === 'C');
     if (coreNodes.length <= 1) return '0.00';
@@ -695,7 +691,7 @@ const getCoreDensity = (metrics, graphData) => {
 };
 
 const getCorePeriConnectivity = (metrics, graphData) => {
-  // Check if metrics has core_periphery_metrics with periphery_core_connectivity
+  // First check if metrics has core_periphery_metrics.periphery_core_connectivity
   if (metrics?.core_periphery_metrics?.periphery_core_connectivity !== undefined) {
     return metrics.core_periphery_metrics.periphery_core_connectivity.toFixed(2);
   }

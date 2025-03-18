@@ -1,9 +1,9 @@
-import React, { useMemo, useState, useCallback } from "react";
+import React, { useMemo, useState, useCallback, useEffect } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid, Cell, Line, ComposedChart } from "recharts";
 import { Card, Typography, Box, Divider, useTheme, Button, Dialog, DialogTitle, DialogContent, DialogActions, Paper, Stack, Switch, FormControlLabel, ToggleButtonGroup, ToggleButton } from "@mui/material";
 import { Refresh as RefreshIcon, BarChart as BarChartIcon, BubbleChart as BubbleChartIcon } from '@mui/icons-material';
 
-const DegreeHistogram = ({ graphData, communityData }) => {
+const DegreeHistogram = ({ graphData, communityData, networkMetrics }) => {
   const theme = useTheme();
   const [debugOpen, setDebugOpen] = useState(false);
   const [forceUpdate, setForceUpdate] = useState(0);
@@ -36,97 +36,59 @@ const DegreeHistogram = ({ graphData, communityData }) => {
     return [];
   }, [graphData, communityData, forceUpdate]);
 
-  // Calculate degree for each node based on edges
+  // Use node degrees from the existing data rather than recalculating
   const nodeDegreesMap = useMemo(() => {
     const degreeMap = {};
     
-    // Initialize all nodes with degree 0
+    // Use degree values that are already in the node data
     nodes.forEach(node => {
-      degreeMap[node.id] = 0;
-    });
-    
-    // Count connections for each node
-    edges.forEach(edge => {
-      // Make sure source and target are strings for consistent comparison
-      const source = String(edge.source);
-      const target = String(edge.target);
-      
-      if (degreeMap[source] !== undefined) {
-        degreeMap[source]++;
+      if (node.degree !== undefined) {
+        degreeMap[node.id] = node.degree;
       } else {
-        // If node wasn't in our initial list, add it
-        degreeMap[source] = 1;
-      }
-      
-      if (degreeMap[target] !== undefined) {
-        degreeMap[target]++;
-      } else {
-        // If node wasn't in our initial list, add it
-        degreeMap[target] = 1;
+        degreeMap[node.id] = 0;
       }
     });
-    
-    // If we have no edges but nodes have degree property, use that
-    if (edges.length === 0) {
-      nodes.forEach(node => {
-        if (node.degree !== undefined) {
-          degreeMap[node.id] = node.degree;
-        }
-      });
-    }
-    
-    console.log('Calculated node degrees:', degreeMap);
-    console.log('Sample node from data:', nodes.length > 0 ? nodes[0] : 'No nodes');
-    console.log('Sample edge from data:', edges.length > 0 ? edges[0] : 'No edges');
     
     return degreeMap;
-  }, [nodes, edges, forceUpdate]);
+  }, [nodes, forceUpdate]);
 
   // Function to handle refresh
   const handleRefresh = useCallback(() => {
     setForceUpdate(prev => prev + 1);
   }, []);
 
+  // Debug dialog to show data
+  const handleDebugClick = useCallback(() => {
+    setDebugOpen(true);
+  }, []);
+
   // Calculate degree distribution from graph data
   const degreeDistribution = useMemo(() => {
-    // Count nodes by degree
-    const degreeCounts = {};
-    
-    // Use the calculated degrees or fallback to node.degree if available
-    nodes.forEach(node => {
-      // First try to use our calculated degree
-      let degree = nodeDegreesMap[node.id] || 0;
+    // If backend provided a pre-calculated degree distribution, use it
+    if (graphData?.degree_distribution) {
+      console.log('Using pre-calculated degree distribution from backend');
+      const distribution = graphData.degree_distribution.map(item => ({
+        degree: item.degree,
+        count: item.count
+      })).sort((a, b) => a.degree - b.degree);
       
-      // If that's 0, try to use the degree property from the node if available
-      if (degree === 0 && node.degree !== undefined) {
-        degree = node.degree;
-      }
+      // Add log values for power law analysis
+      distribution.forEach(item => {
+        if (item.degree > 0 && item.count > 0) {
+          item.logDegree = Math.log10(item.degree);
+          item.logCount = Math.log10(item.count);
+        } else {
+          item.logDegree = 0;
+          item.logCount = 0;
+        }
+      });
       
-      // Count nodes with this degree
-      degreeCounts[degree] = (degreeCounts[degree] || 0) + 1;
-    });
+      return distribution;
+    }
     
-    // Convert to array for chart
-    const distribution = Object.entries(degreeCounts)
-      .map(([degree, count]) => ({
-        degree: parseInt(degree),
-        count
-      }))
-      .sort((a, b) => a.degree - b.degree);
-    
-    // Add log values for power law analysis
-    distribution.forEach(item => {
-      if (item.degree > 0 && item.count > 0) {
-        item.logDegree = Math.log10(item.degree);
-        item.logCount = Math.log10(item.count);
-      } else {
-        item.logDegree = 0;
-        item.logCount = 0;
-      }
-    });
-    
-    return distribution;
-  }, [nodes, nodeDegreesMap, forceUpdate]);
+    // Return empty array if no pre-calculated degree distribution is available
+    return [];
+  }, [graphData]);
 
   // Prepare data for node-by-node view
   const nodeByNodeData = useMemo(() => {
@@ -202,11 +164,6 @@ const DegreeHistogram = ({ graphData, communityData }) => {
     return theme.palette.error.main;
   };
 
-  // Debug function to show data details
-  const handleDebugClick = () => {
-    setDebugOpen(true);
-  };
-
   // Toggle log scale
   const handleToggleLogScale = () => {
     setShowLogScale(!showLogScale);
@@ -223,6 +180,13 @@ const DegreeHistogram = ({ graphData, communityData }) => {
   const handleNodeLimitChange = (event) => {
     setNodeLimit(Math.max(5, parseInt(event.target.value) || 20));
   };
+
+  // Set viewMode to byNode if no degree distribution is available
+  useEffect(() => {
+    if (!graphData?.degree_distribution && viewMode === 'distribution') {
+      setViewMode('byNode');
+    }
+  }, [graphData, viewMode]);
 
   return (
     <Card sx={{ p: 4, boxShadow: 3, borderRadius: 2 }}>
@@ -241,7 +205,11 @@ const DegreeHistogram = ({ graphData, communityData }) => {
             <ToggleButton value="byNode" aria-label="by node view">
               <BubbleChartIcon fontSize="small" />
             </ToggleButton>
-            <ToggleButton value="distribution" aria-label="distribution view">
+            <ToggleButton 
+              value="distribution" 
+              aria-label="distribution view"
+              disabled={!graphData?.degree_distribution}
+            >
               <BarChartIcon fontSize="small" />
             </ToggleButton>
           </ToggleButtonGroup>

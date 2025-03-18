@@ -122,8 +122,18 @@ def process_graph_with_rombach(graph: nx.Graph, num_runs: int = 10, alpha: float
     rombach = Rombach(num_runs=num_runs, alpha=alpha, beta=beta)
     rombach.detect(graph)
     x = {node: rombach.x_[i] for i, node in enumerate(graph.nodes())}
-    mean_coreness = sum(x.values()) / len(x)
-    c = {node: 1 if x[node] > mean_coreness else 0 for node in graph.nodes()}
+    
+    # Use a more robust threshold (0.5) instead of mean_coreness to separate core and periphery
+    # This matches the paper's approach better
+    threshold = 0.5  # Fixed threshold as per Rombach paper
+    print(f"Using coreness threshold of {threshold} for core-periphery classification")
+    c = {node: 1 if x[node] > threshold else 0 for node in graph.nodes()}
+    
+    # Debug information
+    core_count = sum(1 for v in c.values() if v == 1)
+    periphery_count = sum(1 for v in c.values() if v == 0)
+    print(f"Classification result: {core_count} core nodes, {periphery_count} periphery nodes")
+    
     return c, x
 
 def process_graph_with_be(graph: nx.Graph, num_runs: int = 10) -> Tuple[Dict, Dict]:
@@ -131,8 +141,22 @@ def process_graph_with_be(graph: nx.Graph, num_runs: int = 10) -> Tuple[Dict, Di
     be = BE(num_runs=num_runs)
     be.detect(graph)
     x = {node: be.x_[i] for i, node in enumerate(graph.nodes())}
-    mean_coreness = sum(x.values()) / len(x)
-    c = {node: 1 if x[node] > mean_coreness else 0 for node in graph.nodes()}
+    
+    # Use a more robust threshold instead of mean_coreness to separate core and periphery
+    coreness_values = list(x.values())
+    if coreness_values:
+        # Calculate threshold based on distribution of coreness values
+        threshold = 0.5
+        print(f"Using coreness threshold of {threshold} for core-periphery classification")
+        c = {node: 1 if x[node] > threshold else 0 for node in graph.nodes()}
+    else:
+        c = {node: 0 for node in graph.nodes()}
+    
+    # Debug information
+    core_count = sum(1 for v in c.values() if v == 1)
+    periphery_count = sum(1 for v in c.values() if v == 0)
+    print(f"Classification result: {core_count} core nodes, {periphery_count} periphery nodes")
+    
     return c, x
 
 def process_graph_with_holme(graph: nx.Graph, num_iterations: int = 100, threshold: float = 0.05) -> Tuple[Dict, Dict]:
@@ -140,8 +164,22 @@ def process_graph_with_holme(graph: nx.Graph, num_iterations: int = 100, thresho
     holme = Holme(num_iterations=num_iterations, threshold=threshold)
     holme.detect(graph)
     x = {node: holme.x_[i] for i, node in enumerate(graph.nodes())}
-    mean_coreness = sum(x.values()) / len(x)
-    c = {node: 1 if x[node] > mean_coreness else 0 for node in graph.nodes()}
+    
+    # Use a more robust threshold instead of mean_coreness to separate core and periphery
+    coreness_values = list(x.values())
+    if coreness_values:
+        # Calculate threshold based on distribution of coreness values
+        coreness_threshold = 0.5
+        print(f"Using coreness threshold of {coreness_threshold} for core-periphery classification")
+        c = {node: 1 if x[node] > coreness_threshold else 0 for node in graph.nodes()}
+    else:
+        c = {node: 0 for node in graph.nodes()}
+    
+    # Debug information
+    core_count = sum(1 for v in c.values() if v == 1)
+    periphery_count = sum(1 for v in c.values() if v == 0)
+    print(f"Classification result: {core_count} core nodes, {periphery_count} periphery nodes")
+    
     return c, x
 
 def export_to_gdf(graph, classifications, output_path):
@@ -170,17 +208,56 @@ def get_core_stats(graph, classifications):
     """Calculate comprehensive core-periphery specific metrics."""
     # Handle different formats of classifications (list or dict)
     if isinstance(classifications, dict):
-        core_nodes = [node for node, val in classifications.items() if val == 'C']
-        periphery_nodes = [node for node, val in classifications.items() if val == 'P']
+        # Check if we have string or numeric classifications
+        sample_value = next(iter(classifications.values())) if classifications else None
+        if isinstance(sample_value, str):
+            # String format: 'C' and 'P'
+            core_nodes = [node for node, val in classifications.items() if val == 'C']
+            periphery_nodes = [node for node, val in classifications.items() if val == 'P']
+        else:
+            # Numeric format: 1 and 0
+            core_nodes = [node for node, val in classifications.items() if val == 1]
+            periphery_nodes = [node for node, val in classifications.items() if val == 0]
     else:
-        # For list format, typically 1 = core, 0 = periphery
-        core_nodes = [i for i, val in enumerate(classifications) if val == 1]
-        periphery_nodes = [i for i, val in enumerate(classifications) if val == 0]
+        # For list format, handle both string and numeric types
+        if classifications and isinstance(classifications[0], str):
+            # Map indices to actual graph nodes
+            node_list = list(graph.nodes())
+            core_nodes = [node_list[i] for i in range(min(len(classifications), len(node_list))) if classifications[i] == 'C']
+            periphery_nodes = [node_list[i] for i in range(min(len(classifications), len(node_list))) if classifications[i] == 'P']
+        else:
+            # Map indices to actual graph nodes
+            node_list = list(graph.nodes())
+            core_nodes = [node_list[i] for i in range(min(len(classifications), len(node_list))) if classifications[i] == 1]
+            periphery_nodes = [node_list[i] for i in range(min(len(classifications), len(node_list))) if classifications[i] == 0]
     
     total_nodes = len(core_nodes) + len(periphery_nodes)
     
     # Debug information to help identify issues
     print(f"Core stats calculation: {len(core_nodes)} core nodes, {len(periphery_nodes)} periphery nodes, {total_nodes} total nodes")
+    
+    # If we have no classifications (empty or invalid), return zeros for all metrics
+    if total_nodes == 0:
+        print("Warning: No valid core-periphery classifications found")
+        return {
+            "core_size": 0,
+            "periphery_size": 0,
+            "core_percentage": 0,
+            "core_density": 0,
+            "periphery_core_connectivity": 0,
+            "periphery_isolation": 0,
+            "core_periphery_ratio": 0,
+            "structure_quality": 0,
+            "connection_patterns": {
+                "core_core": 0,
+                "core_periphery": 0,
+                "periphery_periphery": 0
+            },
+            "ideal_pattern_match": 0,
+            "core_density_interpretation": "No core-periphery structure detected",
+            "cp_ratio_interpretation": "No core-periphery structure detected",
+            "pattern_match_interpretation": "No core-periphery structure detected"
+        }
     
     # Calculate core percentage - ensure no division by zero
     core_percentage = (len(core_nodes) / total_nodes * 100) if total_nodes > 0 else 0
@@ -369,11 +446,49 @@ def draw_static(graph, c, x):
         print(f"Error generating static image: {str(e)}")
         return None
 
-def generate_csv(graph, c, x):
-    """Generate a CSV file with node and edge data."""
+def generate_csv(graph, c, x, pre_calculated_betweenness=None):
+    """Generate a CSV file with node data including type, coreness, and betweenness."""
     try:
         # Create a unique filename
         filename = f"{uuid.uuid4()}.csv"
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        output_dir = os.path.abspath(os.path.join(current_dir, "..", "static"))
+        filepath = os.path.join(output_dir, filename)
+        
+        # Use pre-calculated betweenness if provided, otherwise calculate it
+        betweenness = pre_calculated_betweenness if pre_calculated_betweenness is not None else nx.betweenness_centrality(graph)
+        
+        # Create node classifications
+        classifications = {}
+        for i, node in enumerate(graph.nodes()):
+            coreness = x[i] if isinstance(x, list) else x.get(node, 0)
+            node_type = "C" if (c[i] if isinstance(c, list) else c.get(node, 0)) > 0.5 else "P"
+            classifications[node] = node_type
+        
+        # Write to CSV
+        with open(filepath, 'w', newline='') as csvfile:
+            writer = csv.writer(csvfile)
+            writer.writerow(['node', 'type', 'coreness', 'betweenness'])
+            
+            for node in graph.nodes():
+                coreness = x[node] if isinstance(x, dict) else x[list(graph.nodes()).index(node)]
+                writer.writerow([
+                    node, 
+                    classifications[node],
+                    float(coreness),
+                    betweenness[node]
+                ])
+        
+        return filename
+    except Exception as e:
+        print(f"Error generating CSV file: {str(e)}")
+        return None
+
+def generate_edges_csv(graph, c, x):
+    """Generate a CSV file with edge data."""
+    try:
+        # Create a unique filename
+        filename = f"{uuid.uuid4()}_edges.csv"
         current_dir = os.path.dirname(os.path.abspath(__file__))
         output_dir = os.path.abspath(os.path.join(current_dir, "..", "static"))
         filepath = os.path.join(output_dir, filename)
@@ -395,11 +510,11 @@ def generate_csv(graph, c, x):
         
         return filename
     except Exception as e:
-        print(f"Error generating CSV file: {str(e)}")
+        print(f"Error generating edges CSV file: {str(e)}")
         return None
 
-def generate_gdf(graph, c, x):
-    """Generate a GDF file with node and edge data."""
+def generate_gdf(graph, c, x, pre_calculated_betweenness=None):
+    """Generate a GDF file with comprehensive node and edge data."""
     try:
         # Create a unique filename
         filename = f"{uuid.uuid4()}.gdf"
@@ -407,6 +522,20 @@ def generate_gdf(graph, c, x):
         output_dir = os.path.abspath(os.path.join(current_dir, "..", "static"))
         filepath = os.path.join(output_dir, filename)
         
+        # Calculate metrics if not provided
+        degrees = dict(graph.degree())
+        betweenness = pre_calculated_betweenness if pre_calculated_betweenness is not None else nx.betweenness_centrality(graph)
+        try:
+            closeness = nx.closeness_centrality(graph)
+        except:
+            closeness = {node: 0.0 for node in graph.nodes()}
+            
+        # Try to calculate additional metrics that might be useful
+        try:
+            eigenvector = nx.eigenvector_centrality(graph, max_iter=100)
+        except:
+            eigenvector = {node: 0.0 for node in graph.nodes()}
+            
         # Create node classifications
         classifications = {}
         for i, node in enumerate(graph.nodes()):
@@ -415,50 +544,47 @@ def generate_gdf(graph, c, x):
         
         # Write to GDF
         with open(filepath, 'w') as f:
-            # Write node definitions
-            f.write("nodedef>name VARCHAR,label VARCHAR,type VARCHAR,coreness DOUBLE\n")
+            # Write node definitions with expanded attributes
+            f.write("nodedef>name VARCHAR,label VARCHAR,type VARCHAR,coreness DOUBLE,degree INTEGER,betweenness DOUBLE,closeness DOUBLE,eigenvector DOUBLE\n")
             for node in graph.nodes():
-                coreness = c[node] if isinstance(c, dict) else c[list(graph.nodes()).index(node)]
-                f.write(f"{node},{node},{classifications[node]},{coreness}\n")
+                coreness_value = x[node] if isinstance(x, dict) else x[list(graph.nodes()).index(node)]
+                f.write(f"{node},{node},{classifications[node]},{coreness_value},{degrees.get(node, 0)},{betweenness.get(node, 0.0)},{closeness.get(node, 0.0)},{eigenvector.get(node, 0.0)}\n")
             
-            # Write edge definitions
-            f.write("edgedef>node1 VARCHAR,node2 VARCHAR,type VARCHAR\n")
-            for u, v in graph.edges():
+            # Write edge definitions with expanded attributes
+            f.write("edgedef>node1 VARCHAR,node2 VARCHAR,type VARCHAR,weight DOUBLE\n")
+            for u, v, data in graph.edges(data=True):
                 edge_type = f"{classifications[u]}-{classifications[v]}"
-                f.write(f"{u},{v},{edge_type}\n")
+                weight = data.get('weight', 1.0)
+                f.write(f"{u},{v},{edge_type},{weight}\n")
         
         return filename
     except Exception as e:
         print(f"Error generating GDF file: {str(e)}")
         return None
 
-def get_top_nodes(graph, c):
-    """Get the top nodes based on coreness values."""
+def get_top_nodes(graph, c, classifications=None):
+    """Get the top nodes based on coreness values and optional pre-calculated classifications."""
     top_core_nodes = []
     top_periphery_nodes = []
     betweenness = nx.betweenness_centrality(graph)
     
-    # Calculate the threshold for core classification
-    # Use the median coreness value as a threshold
-    if isinstance(c, list):
-        coreness_values = c
-    else:
-        coreness_values = list(c.values())
-    
-    # Use 0.5 as default threshold, but if all values are below 0.5,
-    # use the median value to ensure we have some core nodes
-    threshold = 0.5
-    if max(coreness_values) < threshold:
-        threshold = sorted(coreness_values)[len(coreness_values) // 2]
-    
-    print(f"Using coreness threshold of {threshold} for core-periphery classification")
-    
     all_nodes = []
     for i, node in enumerate(graph.nodes()):
         coreness = c[i] if isinstance(c, list) else c.get(node, 0)
+        
+        # If classifications are provided, use them directly
+        if classifications is not None:
+            if isinstance(classifications, dict):
+                node_type = classifications.get(node)
+            else:
+                node_type = classifications[i] if i < len(classifications) else None
+        else:
+            # Use 0.5 as default threshold for determining core vs periphery
+            node_type = "C" if coreness > 0.5 else "P"
+        
         node_data = {
             "id": node,
-            "type": "C" if coreness > threshold else "P",
+            "type": node_type,
             "coreness": float(coreness),
             "betweenness": betweenness[node],
             "degree": graph.degree(node)
@@ -546,7 +672,7 @@ def process_graph(graph, algorithm=None, params=None):
             network_metrics = calculate_all_network_metrics(graph, classifications, coreness, algorithm, params)
             
             # Get top nodes
-            top_nodes_result = get_top_nodes(graph, coreness)
+            top_nodes_result = get_top_nodes(graph, coreness, classifications)
             top_core_nodes = top_nodes_result["top_core_nodes"]
             top_periphery_nodes = top_nodes_result["top_periphery_nodes"]
             

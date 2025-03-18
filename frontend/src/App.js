@@ -87,7 +87,8 @@ function App() {
   const [currentView, setCurrentView] = useState('home');
   const [graphData, setGraphData] = useState(null);
   const [algorithmMetrics, setAlgorithmMetrics] = useState(null);
-  const [csvFile, setCsvFile] = useState(null);
+  const [nodeCsvFile, setNodeCsvFile] = useState(null);
+  const [edgeCsvFile, setEdgeCsvFile] = useState(null);
   const [gdfFile, setGdfFile] = useState(null);
   const [networkMetrics, setNetworkMetrics] = useState(null);
   const [communityData, setCommunityData] = useState(null);
@@ -100,7 +101,8 @@ function App() {
   const resetState = () => {
     setGraphData(null);
     setAlgorithmMetrics(null);
-    setCsvFile(null);
+    setNodeCsvFile(null);
+    setEdgeCsvFile(null);
     setGdfFile(null);
     setNetworkMetrics(null);
     setCommunityData(null);
@@ -135,7 +137,9 @@ function App() {
         edges: data.graph_data.edges,
         filename: data.filename,
         filesize: data.filesize,
-        filetype: data.filetype
+        filetype: data.filetype,
+        // If degree distribution is available, add it to the graph data
+        degree_distribution: data.degree_distribution || []
       });
     } else {
       // Set graph data with just the file information
@@ -145,6 +149,9 @@ function App() {
         filetype: data.filetype
       });
     }
+    
+    // Navigate to the basic network view tab
+    setSelectedTab(0);
   };
 
   const handleAnalysis = (data) => {
@@ -286,7 +293,8 @@ function App() {
     });
 
     // Set CSV and GDF files for download
-    setCsvFile(data.csv_file);
+    setNodeCsvFile(data.node_csv_file);
+    setEdgeCsvFile(data.edge_csv_file);
     setGdfFile(data.gdf_file);
     
     console.log('Updated graph data and metrics');
@@ -496,7 +504,11 @@ function App() {
           {/* Add Degree Histogram */}
           {(graphData && graphData.nodes) || (communityData && communityData.graph_data) ? (
             <Box sx={{ mt: 4, mb: 4 }}>
-              <DegreeHistogram graphData={graphData} communityData={communityData} />
+              <DegreeHistogram 
+                graphData={graphData} 
+                communityData={communityData} 
+                networkMetrics={networkMetrics}
+              />
             </Box>
           ) : null}
 
@@ -570,7 +582,8 @@ function App() {
             <GraphVisualizer 
               graphData={graphData} 
               metrics={algorithmMetrics} 
-              csvFile={csvFile}
+              nodeCsvFile={nodeCsvFile}
+              edgeCsvFile={edgeCsvFile}
               gdfFile={gdfFile}
               imageFile={algorithmMetrics.image_file}
             />
