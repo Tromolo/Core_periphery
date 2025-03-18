@@ -166,6 +166,9 @@ cython_debug/
 *.graphml
 *.gexf
 *.edgelist
+*.gdf
+
+/static/
 
 package-lock.json
 package.json
