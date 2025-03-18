@@ -9,12 +9,15 @@ import {
   CardContent,
   Chip,
   CircularProgress,
-  Button
+  Button,
+  IconButton,
+  Tooltip
 } from "@mui/material";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import Sigma from "sigma";
 import Graph from "graphology";
 import DownloadIcon from '@mui/icons-material/Download';
+import InfoIcon from '@mui/icons-material/Info';
 
 // Add a style tag to ensure canvas elements fill their container
 const sigmaCanvasStyle = `
@@ -290,6 +293,34 @@ const CommunityAnalysis = ({ communityData }) => {
     }
   };
 
+  // Determine color based on modularity value
+  const getModularityColor = (value) => {
+    if (value >= 0.7) return "success";
+    if (value >= 0.4) return "primary";
+    if (value >= 0.2) return "warning";
+    return "error";
+  };
+
+  // Get tooltip text for modularity value
+  const getModularityTooltip = (value) => {
+    return `Modularity ranges from -0.5 to 1. Higher values indicate stronger community structure. This network's score is ${value.toFixed(3)}.`;
+  };
+
+  // Get detailed interpretation text based on modularity value
+  // This is the authoritative source for modularity in the application
+  // Modularity calculation is done in the backend's prepare_community_analysis_data function
+  const getModularityInterpretation = (value) => {
+    if (value >= 0.7) {
+      return "This network has very strong community structure. The communities are clearly defined with many more connections within communities than between them.";
+    } else if (value >= 0.4) {
+      return "This network has good community structure. Communities are well-defined, with significantly more connections within communities than between them.";
+    } else if (value >= 0.2) {
+      return "This network has moderate community structure. Communities can be identified, but there are still substantial connections between different communities.";
+    } else {
+      return "This network has weak community structure. The identified communities have nearly as many connections between them as within them.";
+    }
+  };
+
   return (
     <Paper
       elevation={0}
@@ -338,9 +369,20 @@ const CommunityAnalysis = ({ communityData }) => {
                   <Chip color="primary" label={min_size} />
                 </Box>
                 
-                <Box sx={{ display: "flex", justifyContent: "space-between" }}>
+                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
                   <Typography variant="body1">Modularity Score:</Typography>
-                  <Chip color="primary" label={modularity.toFixed(3)} />
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    <Chip 
+                      color={getModularityColor(modularity)} 
+                      label={modularity.toFixed(3)} 
+                      sx={{ fontWeight: 'bold' }}
+                    />
+                    <Tooltip title={getModularityTooltip(modularity)}>
+                      <IconButton size="small">
+                        <InfoIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  </Box>
                 </Box>
               </Box>
             </CardContent>
@@ -465,6 +507,21 @@ const CommunityAnalysis = ({ communityData }) => {
               </CardContent>
             </Card>
           )}
+        </Grid>
+        
+        {/* Add modularity interpretation */}
+        <Grid item xs={12}>
+          <Box sx={{ 
+            p: 2, 
+            bgcolor: `${getModularityColor(modularity)}.light`, 
+            borderRadius: 2,
+            opacity: 0.9,
+            mb: 2 
+          }}>
+            <Typography variant="body2">
+              {getModularityInterpretation(modularity)}
+            </Typography>
+          </Box>
         </Grid>
       </Grid>
     </Paper>

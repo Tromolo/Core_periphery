@@ -92,14 +92,8 @@ def calculate_network_metrics(graph: nx.Graph) -> Dict[str, Any]:
                 futures['avg_path_length'] = None
                 futures['diameter'] = None
             
-            # Community detection
-            try:
-                communities = community_louvain.best_partition(graph)
-                futures['modularity'] = executor.submit(
-                    community_louvain.modularity, communities, graph
-                )
-            except:
-                futures['modularity'] = None
+            # Removed modularity calculation here as it's handled in community analysis
+            # This avoids duplicate calculation
             
             # Assortativity
             try:
@@ -174,13 +168,9 @@ def calculate_all_network_metrics(graph: nx.Graph, classifications: Dict, corene
     Calculate all network metrics including core-periphery specific metrics.
     """
     try:
-        # Basic network metrics
         metrics = {
-            "node_count": graph.number_of_nodes(),
-            "edge_count": graph.number_of_edges(),
             "density": nx.density(graph),
             "clustering": nx.average_clustering(graph),
-            "modularity": community_louvain.modularity(community_louvain.best_partition(graph), graph),
         }
         
         # Try to calculate metrics that might fail for disconnected graphs
@@ -196,15 +186,49 @@ def calculate_all_network_metrics(graph: nx.Graph, classifications: Dict, corene
         except:
             metrics["assortativity"] = None
 
-        # Core-periphery specific metrics
-        core_nodes = [node for node, type in classifications.items() if type == 'C']
-        periphery_nodes = [node for node, type in classifications.items() if type == 'P']
+        from backend.functions import get_core_stats
+        core_stats = get_core_stats(graph, classifications)
         
         metrics["core_stats"] = {
-            "core_size": len(core_nodes),
-            "periphery_size": len(periphery_nodes)
+            "core_size": core_stats["core_size"],
+            "periphery_size": core_stats["periphery_size"],
+            "core_percentage": core_stats["core_percentage"]
         }
+        
+        # Add core-periphery metrics
+        metrics["core_periphery_metrics"] = {
+            "core_density": core_stats["core_density"],
+            "periphery_core_connectivity": core_stats["periphery_core_connectivity"],
+            "periphery_isolation": core_stats["periphery_isolation"],
+            "core_periphery_ratio": core_stats["core_periphery_ratio"]
+        }
+        
+        # Add enhanced core-periphery analysis
+        metrics["core_periphery_analysis"] = {
+            "structure_quality": core_stats["structure_quality"],
+            "connection_patterns": core_stats["connection_patterns"],
+            "ideal_pattern_match": core_stats["ideal_pattern_match"],
+            "interpretations": {
+                "core_density": core_stats["core_density_interpretation"],
+                "cp_ratio": core_stats["cp_ratio_interpretation"],
+                "pattern_match": core_stats["pattern_match_interpretation"]
+            }
+        }
+        
+        # Add Holme's core-periphery coefficient if cores exist
+        if core_stats["core_size"] > 0:
+            try:
+                from backend.main import compute_core_periphery_coefficient
+                cp_coefficient = compute_core_periphery_coefficient(
+                    graph, 
+                    [node for node, type in classifications.items() if type == 'C'], 
+                    [node for node, type in classifications.items() if type == 'P']
+                )
+                metrics["core_periphery_metrics"]["cp_coefficient"] = cp_coefficient
+            except Exception as e:
+                print(f"Error calculating core-periphery coefficient: {str(e)}")
 
+        # Keep algorithm-specific parameters
         if algorithm == "rombach":
             metrics["rombach_params"] = {
                 "Q": sum(coreness.values()) / len(coreness),
@@ -223,7 +247,7 @@ def calculate_all_network_metrics(graph: nx.Graph, classifications: Dict, corene
                 "num_runs": algorithm_params.get('num_runs', 10)
             }
 
-
+        # Top nodes information is still valuable
         top_nodes = []
         betweenness = nx.betweenness_centrality(graph)
         for node in graph.nodes():
@@ -235,11 +259,10 @@ def calculate_all_network_metrics(graph: nx.Graph, classifications: Dict, corene
                 "degree": graph.degree(node)
             })
         
-
         top_nodes.sort(key=lambda x: x["coreness"], reverse=True)
         metrics["top_nodes"] = top_nodes[:5]
 
-        # Add connected components analysis
+        # Connected components analysis is still valuable
         metrics["connected_components"] = calculate_connected_components(graph)
 
         return metrics
@@ -355,16 +378,23 @@ def prepare_community_analysis_data(graph):
             "communities": {}
         }
         
+        # Calculate node degrees
+        degrees = dict(graph.degree())
+        
         # Add nodes with positions from the layout
         for node in graph.nodes():
             node_id = str(node)  # Convert to string for JSON compatibility
             community_id = communities[node]
+            node_degree = degrees.get(node, 0)
+            
             graph_data["nodes"].append({
                 "id": node_id,
                 "label": node_id,
-                "size": graph.degree(node) + 3,  # Size based on degree
+                "size": node_degree + 3,  # Size based on degree
+                "degree": node_degree,  # Add degree explicitly for histogram
                 "x": float(pos[node][0]),  # Convert numpy values to Python floats
-                "y": float(pos[node][1])
+                "y": float(pos[node][1]),
+                "community": community_id
             })
             graph_data["communities"][node_id] = community_id
         

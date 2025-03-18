@@ -157,14 +157,6 @@ const GraphStats = ({ graphData, metrics }) => {
             </Grid>
             <Grid item xs={12} sm={6}>
               <StatCard 
-                label="Modularity" 
-                value={metrics.modularity?.toFixed(4)}
-                icon={<Hub />}
-                color={theme.palette.primary.main}
-              />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <StatCard 
                 label="Avg Path Length" 
                 value={metrics.avg_path_length?.toFixed(4)}
                 icon={<Timeline />}

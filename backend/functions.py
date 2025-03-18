@@ -167,14 +167,165 @@ def export_to_gdf(graph, classifications, output_path):
         return False
 
 def get_core_stats(graph, classifications):
-    """Calculate core-periphery specific metrics."""
-    core_nodes = [i for i, val in enumerate(classifications) if val == 1]
-    periphery_nodes = [i for i, val in enumerate(classifications) if val == 0]
+    """Calculate comprehensive core-periphery specific metrics."""
+    # Handle different formats of classifications (list or dict)
+    if isinstance(classifications, dict):
+        core_nodes = [node for node, val in classifications.items() if val == 'C']
+        periphery_nodes = [node for node, val in classifications.items() if val == 'P']
+    else:
+        # For list format, typically 1 = core, 0 = periphery
+        core_nodes = [i for i, val in enumerate(classifications) if val == 1]
+        periphery_nodes = [i for i, val in enumerate(classifications) if val == 0]
+    
+    total_nodes = len(core_nodes) + len(periphery_nodes)
+    
+    # Debug information to help identify issues
+    print(f"Core stats calculation: {len(core_nodes)} core nodes, {len(periphery_nodes)} periphery nodes, {total_nodes} total nodes")
+    
+    # Calculate core percentage - ensure no division by zero
+    core_percentage = (len(core_nodes) / total_nodes * 100) if total_nodes > 0 else 0
+    
+    # Calculate additional core-periphery metrics
+    # 1. Core Density - how densely connected are core nodes
+    core_subgraph = graph.subgraph(core_nodes)
+    core_density = nx.density(core_subgraph) if len(core_nodes) > 1 else 0.0
+    
+    # 2. Core-Periphery Connectivity - average connections from periphery to core
+    core_periphery_edges = 0
+    for p_node in periphery_nodes:
+        for c_node in core_nodes:
+            if graph.has_edge(p_node, c_node):
+                core_periphery_edges += 1
+    
+    periphery_core_connectivity = (core_periphery_edges / len(periphery_nodes)) if len(periphery_nodes) > 0 else 0.0
+    
+    # 3. Count different connection types
+    core_core_edges = 0
+    periphery_periphery_edges = 0
+    
+    for u, v in graph.edges():
+        if u in core_nodes and v in core_nodes:
+            core_core_edges += 1
+        elif (u in core_nodes and v in periphery_nodes) or (u in periphery_nodes and v in core_nodes):
+            # Already counted above
+            pass
+        elif u in periphery_nodes and v in periphery_nodes:
+            periphery_periphery_edges += 1
+    
+    total_edges = graph.number_of_edges()
+    
+    # Calculate percentages
+    core_core_percentage = (core_core_edges / total_edges * 100) if total_edges > 0 else 0
+    core_periphery_percentage = (core_periphery_edges / total_edges * 100) if total_edges > 0 else 0
+    periphery_periphery_percentage = (periphery_periphery_edges / total_edges * 100) if total_edges > 0 else 0
+    
+    # 4. Periphery Isolation - percentage of connections between periphery nodes
+    periphery_isolation = periphery_periphery_percentage
+    
+    # 5. Core-Periphery Ratio - ratio of core-periphery edges to total edges
+    core_periphery_ratio = (core_periphery_edges / total_edges) if total_edges > 0 else 0
+    
+    # 6. Calculate ideal pattern match
+    # In an ideal pattern: all core nodes connect to each other and all periphery nodes 
+    # connect only to core nodes (no periphery-periphery connections)
+    total_pattern_score = 0
+    max_pattern_score = 0
+    
+    # Check core-core connections (should all exist)
+    for i in range(len(core_nodes)):
+        for j in range(i+1, len(core_nodes)):
+            max_pattern_score += 1
+            if graph.has_edge(core_nodes[i], core_nodes[j]):
+                total_pattern_score += 1
+    
+    # Check periphery-core connections (should exist)
+    for p_node in periphery_nodes:
+        for c_node in core_nodes:
+            max_pattern_score += 1
+            if graph.has_edge(p_node, c_node):
+                total_pattern_score += 1
+    
+    # Check periphery-periphery connections (should NOT exist)
+    for i in range(len(periphery_nodes)):
+        for j in range(i+1, len(periphery_nodes)):
+            max_pattern_score += 1
+            if not graph.has_edge(periphery_nodes[i], periphery_nodes[j]):
+                total_pattern_score += 1
+    
+    ideal_pattern_match = (total_pattern_score / max_pattern_score * 100) if max_pattern_score > 0 else 0
+    
+    # 7. Determine structure quality
+    structure_quality = "uncertain"
+    if core_density > 0.7 and periphery_periphery_percentage < 10:
+        structure_quality = "strong"
+    elif core_density > 0.4 and periphery_periphery_percentage < 20:
+        structure_quality = "moderate"
+    elif periphery_periphery_percentage > core_core_percentage or periphery_periphery_percentage > core_periphery_percentage:
+        structure_quality = "weak"
+    else:
+        structure_quality = "mixed"
+    
+    # 8. Core Density Interpretation
+    if core_density >= 0.8:
+        core_density_interpretation = "Very high density - strongly connected core"
+    elif core_density >= 0.6:
+        core_density_interpretation = "High density - well-connected core"
+    elif core_density >= 0.4:
+        core_density_interpretation = "Moderate density - reasonably connected core"
+    elif core_density >= 0.2:
+        core_density_interpretation = "Low density - sparsely connected core"
+    else:
+        core_density_interpretation = "Very low density - poorly connected core"
+    
+    # 9. Core-Periphery Ratio Interpretation
+    if core_periphery_ratio >= 0.6:
+        cp_ratio_interpretation = "High integration between core and periphery"
+    elif core_periphery_ratio >= 0.4:
+        cp_ratio_interpretation = "Moderate integration between core and periphery"
+    elif core_periphery_ratio >= 0.2:
+        cp_ratio_interpretation = "Low integration between core and periphery"
+    else:
+        cp_ratio_interpretation = "Very low integration between core and periphery"
+    
+    # 10. Ideal Pattern Match Interpretation
+    if ideal_pattern_match >= 90:
+        pattern_match_interpretation = "Excellent match to ideal core-periphery structure"
+    elif ideal_pattern_match >= 75:
+        pattern_match_interpretation = "Good match to ideal core-periphery structure"
+    elif ideal_pattern_match >= 50:
+        pattern_match_interpretation = "Moderate match to ideal core-periphery structure"
+    elif ideal_pattern_match >= 25:
+        pattern_match_interpretation = "Weak match to ideal core-periphery structure"
+    else:
+        pattern_match_interpretation = "Poor match to ideal core-periphery structure"
     
     return {
         "core_size": len(core_nodes),
         "periphery_size": len(periphery_nodes),
-        "core_percentage": len(core_nodes) / len(classifications) * 100 if classifications else 0
+        "core_percentage": core_percentage,
+        "core_density": core_density,
+        "core_density_interpretation": core_density_interpretation,
+        "periphery_core_connectivity": periphery_core_connectivity,
+        "periphery_isolation": periphery_isolation,
+        "core_periphery_ratio": core_periphery_ratio,
+        "cp_ratio_interpretation": cp_ratio_interpretation,
+        "connection_patterns": {
+            "core_core": {
+                "count": core_core_edges,
+                "percentage": core_core_percentage
+            },
+            "core_periphery": {
+                "count": core_periphery_edges,
+                "percentage": core_periphery_percentage
+            },
+            "periphery_periphery": {
+                "count": periphery_periphery_edges,
+                "percentage": periphery_periphery_percentage
+            }
+        },
+        "ideal_pattern_match": ideal_pattern_match,
+        "pattern_match_interpretation": pattern_match_interpretation,
+        "structure_quality": structure_quality
     }
 
 def draw_static(graph, c, x):
@@ -428,12 +579,13 @@ def process_graph(graph, algorithm=None, params=None):
                     node_type = "C" if node_type == 1 else "P"
                     
                 coreness_value = coreness_list[i]
+                node_degree = degrees.get(node, 0)
                 
                 graph_data["nodes"].append({
                     "id": str(node),
                     "type": node_type,
                     "coreness": float(coreness_value),
-                    "degree": degrees.get(node, 0),
+                    "degree": node_degree,
                     "betweenness": betweenness.get(node, 0.0),
                     "closeness": closeness.get(node, 0.0)
                 })

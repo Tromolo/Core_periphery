@@ -34,6 +34,7 @@ import CommunityAnalysis from "./components/CommunityAnalysis";
 import ConnectedComponentsChart from "./components/ConnectedComponentsChart";
 import MetricsTable from "./components/MetricsTable";
 import AlgorithmSelector from "./components/AlgorithmSelector";
+import DegreeHistogram from './components/DegreeHistogram';
 
 const theme = createTheme({
   palette: {
@@ -124,12 +125,26 @@ function App() {
     // Set community data
     setCommunityData(data.community_data);
     
-    // Set graph data with the file information
-    setGraphData({
-      filename: data.filename,
-      filesize: data.filesize,
-      filetype: data.filetype
-    });
+    // Process graph data for visualization
+    if (data.graph_data && data.graph_data.nodes && data.graph_data.edges) {
+      console.log(`Graph data received: ${data.graph_data.nodes.length} nodes, ${data.graph_data.edges.length} edges`);
+      
+      // Set graph data with nodes and edges for visualization
+      setGraphData({
+        nodes: data.graph_data.nodes,
+        edges: data.graph_data.edges,
+        filename: data.filename,
+        filesize: data.filesize,
+        filetype: data.filetype
+      });
+    } else {
+      // Set graph data with just the file information
+      setGraphData({
+        filename: data.filename,
+        filesize: data.filesize,
+        filetype: data.filetype
+      });
+    }
   };
 
   const handleAnalysis = (data) => {
@@ -473,6 +488,13 @@ function App() {
               <GraphStats graphData={graphData} metrics={networkMetrics} />
             </Grid>
           </Grid>
+
+          {/* Add Degree Histogram */}
+          {(graphData && graphData.nodes) || (communityData && communityData.graph_data) ? (
+            <Box sx={{ mt: 4, mb: 4 }}>
+              <DegreeHistogram graphData={graphData} communityData={communityData} />
+            </Box>
+          ) : null}
 
           {networkMetrics?.connected_components && (
             <Box sx={{ mt: 4 }}>
