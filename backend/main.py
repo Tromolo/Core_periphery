@@ -1,16 +1,12 @@
 import os
-import uuid
-import shutil
 import networkx as nx
 import asyncio
 import time
-from datetime import datetime
 import glob
 from collections import Counter
 
 from fastapi import FastAPI, File, UploadFile, HTTPException, Form, Body
 from fastapi.responses import JSONResponse
-import pandas as pd
 import uvicorn
 import community as community_louvain
 from fastapi.staticfiles import StaticFiles
@@ -18,8 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.responses import FileResponse
 from pydantic import BaseModel
 
-from .functions import classify_and_save_edges, process_graph_with_rombach, process_graph_with_be, process_graph_with_holme, load_graph_file, process_graph
-from .utils import  draw_interactive
+from .functions import load_graph_file, get_algorithm_function, get_node_classifications_and_coreness, generate_csv, generate_edges_csv, generate_gdf
 from .Metrics import calculate_all_network_metrics, calculate_network_metrics, calculate_connected_components, prepare_community_analysis_data
 
 from contextlib import asynccontextmanager
@@ -29,10 +24,8 @@ class AlgorithmRequest(BaseModel):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup
     cleanup_task = asyncio.create_task(cleanup_static_directory())
     yield
-    # Shutdown
     cleanup_task.cancel()
     try:
         await cleanup_task
@@ -41,7 +34,6 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-# Define the static directory path using absolute path
 current_dir = os.path.dirname(os.path.abspath(__file__))
 output_dir = os.path.abspath(os.path.join(current_dir, "..", "static"))
 print(f"Static directory path: {output_dir}")
@@ -66,28 +58,21 @@ async def upload_graph(file: UploadFile = File(...)):
         global global_graph
         
         try:
-            print("Loading graph file...")
             global_graph = await load_graph_file(file)
             print(f"Graph loaded successfully: {global_graph.number_of_nodes()} nodes, {global_graph.number_of_edges()} edges")
         except Exception as e:
-            print(f"Error loading file: {str(e)}")
             raise HTTPException(status_code=400, detail=f"Error loading file: {str(e)}")
 
         try:
-            print("Calculating network metrics...")
-            # Calculate only basic network metrics, community data, and connected components
             network_metrics = calculate_network_metrics(global_graph)
             community_data = prepare_community_analysis_data(global_graph)
             
-            # Prepare basic graph data for visualization
             graph_data = {
                 "nodes": [],
                 "edges": []
             }
             
-            # Calculate node metrics for visualization
             degrees = dict(global_graph.degree())
-            # Add nodes
             for node in global_graph.nodes():
                 node_degree = degrees.get(node, 0)
                 
@@ -96,10 +81,8 @@ async def upload_graph(file: UploadFile = File(...)):
                     "degree": node_degree,
                 })
                 
-            # Add edges
             for edge in global_graph.edges():
                 source, target = edge
-                # Get edge data if available
                 edge_data = global_graph.get_edge_data(source, target) or {}
                 weight = edge_data.get('weight', 1.0)
                 
@@ -110,13 +93,9 @@ async def upload_graph(file: UploadFile = File(...)):
                     "weight": float(weight)
                 })
             
-            # Get degree distribution directly from network_metrics
-            # No need to recalculate it
             degree_distribution = network_metrics.get('degree_distribution', [])
             
-            print("Network metrics calculated successfully")
         except Exception as e:
-            print(f"Error calculating network metrics: {str(e)}")
             raise HTTPException(status_code=400, detail=f"Error calculating network metrics: {str(e)}")
         
         return JSONResponse(
@@ -135,7 +114,7 @@ async def upload_graph(file: UploadFile = File(...)):
         print(f"Unexpected error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
-# Add a new endpoint for direct file upload and analysis in one step
+
 @app.post("/analyze")
 async def analyze_uploaded_graph(
     file: UploadFile = File(...),
@@ -147,7 +126,6 @@ async def analyze_uploaded_graph(
     threshold: float = Form(0.05)
 ):
     try:
-        # Load the graph from the uploaded file
         try:
             print("Loading graph file...")
             graph = await load_graph_file(file)
@@ -156,7 +134,6 @@ async def analyze_uploaded_graph(
             print(f"Error loading file: {str(e)}")
             raise HTTPException(status_code=400, detail=f"Error loading file: {str(e)}")
         
-        # Set algorithm parameters based on the selected algorithm
         params = {}
         if algorithm == 'rombach':
             params = {
@@ -176,95 +153,81 @@ async def analyze_uploaded_graph(
         else:
             raise HTTPException(status_code=400, detail=f"Invalid algorithm: {algorithm}")
         
-        # Process the graph with the selected algorithm
         print(f"Processing graph with {algorithm} algorithm...")
-        
-        # Get algorithm function
-        from backend.functions import get_algorithm_function
+
         algorithm_func = get_algorithm_function(algorithm)
-        
-        # Run the core-periphery detection algorithm
         classifications, coreness = algorithm_func(graph, **params)
+
+        string_classifications, coreness_values = get_node_classifications_and_coreness(graph, classifications, coreness)
         
-        # Convert numeric classifications (0/1) to string format ('P'/'C') for compatibility
-        string_classifications = {}
-        if isinstance(classifications, dict):
-            for node, value in classifications.items():
-                string_classifications[node] = 'C' if value == 1 else 'P'
-        else:
-            # Handle list format
-            string_classifications = ['C' if val == 1 else 'P' for val in classifications]
-        
-        # Print debug information about classifications
-        if isinstance(string_classifications, dict):
-            core_count = sum(1 for v in string_classifications.values() if v == 'C')
-            periphery_count = sum(1 for v in string_classifications.values() if v == 'P')
-        else:
-            core_count = string_classifications.count('C')
-            periphery_count = string_classifications.count('P')
-        
-        print(f"Classification conversion: {core_count} core nodes, {periphery_count} periphery nodes")
-        
-        # Convert classifications to a list for JSON serialization
         if isinstance(classifications, dict):
             classifications_list = [classifications.get(node, 0) for node in graph.nodes()]
         else:
-            classifications_list = classifications
-            
-        # Convert coreness to a list for JSON serialization
-        if isinstance(coreness, dict):
-            coreness_list = [coreness.get(node, 0) for node in graph.nodes()]
-        else:
-            coreness_list = coreness
-        
-        # Get core statistics - use string_classifications for better compatibility
+            nodes = list(graph.nodes())
+            node_to_idx = {node: idx for idx, node in enumerate(nodes)}
+            classifications_list = [classifications[node_to_idx.get(node, -1)] if 0 <= node_to_idx.get(node, -1) < len(classifications) else 0 
+                                  for node in graph.nodes()]
+                
+        core_count = sum(1 for c in classifications_list if c > 0.5)
+        periphery_count = len(classifications_list) - core_count
+        print(f"Classification conversion: {core_count} core nodes, {periphery_count} periphery nodes")
+
         from backend.functions import get_core_stats
+        print("Computing core-periphery statistics...")
         core_stats = get_core_stats(graph, string_classifications)
         
-        # For graph visualization, calculate centrality metrics
+        print("Computing node metrics...")
         degrees = dict(graph.degree())
         try:
-            import networkx as nx
-            betweenness = nx.betweenness_centrality(graph)
+            print("Computing closeness centrality...")
             closeness = nx.closeness_centrality(graph)
         except Exception as e:
-            print(f"Error calculating centrality metrics: {str(e)}")
-            betweenness = {node: 0.0 for node in graph.nodes()}
             closeness = {node: 0.0 for node in graph.nodes()}
+
+        print("Generating output files...")
         
-        # Generate node CSV file with pre-calculated betweenness
-        from backend.functions import generate_csv, generate_edges_csv
-        node_csv_file = generate_csv(graph, classifications, coreness, pre_calculated_betweenness=betweenness)
+        node_csv_file = generate_csv(
+            graph, 
+            classifications, 
+            coreness, 
+            string_classifications=string_classifications,
+            coreness_values=coreness_values
+        )
+
+        edge_csv_file = generate_edges_csv(
+            graph, 
+            classifications, 
+            coreness,
+            string_classifications=string_classifications,
+            coreness_values=coreness_values
+        )
         
-        # Generate edges CSV file
-        edge_csv_file = generate_edges_csv(graph, classifications, coreness)
+        gdf_file = generate_gdf(
+            graph, 
+            classifications, 
+            coreness,
+            degrees,
+            closeness,
+            string_classifications=string_classifications,
+            coreness_values=coreness_values
+        )
         
-        # Generate GDF file
-        from backend.functions import generate_gdf
-        gdf_file = generate_gdf(graph, classifications, coreness, pre_calculated_betweenness=betweenness)
-        
-        # Generate static image
-        from backend.functions import draw_static
-        image_file = draw_static(graph, classifications, coreness)
-        
-        # Get top nodes
-        from backend.functions import get_top_nodes
-        top_nodes_result = get_top_nodes(graph, coreness, string_classifications)
-        
-        # Calculate only the core-periphery specific metrics - avoid redundant calculations
-        from backend.Metrics import calculate_all_network_metrics
-        network_metrics = calculate_all_network_metrics(graph, classifications, coreness, algorithm, params, pre_calculated_core_stats=core_stats)
-        
-        # Build graph data with core-periphery information
+        print("Computing network metrics...")
+        network_metrics = calculate_all_network_metrics(
+            graph, 
+            classifications, 
+            coreness, 
+            algorithm, 
+            params, 
+            pre_calculated_core_stats=core_stats
+        )
+                
+        print("Preparing graph data response...")
         graph_data = {"nodes": [], "edges": []}
         
-        # Add nodes with core-periphery classification
-        for i, node in enumerate(graph.nodes()):
-            node_type = classifications_list[i]
-            if isinstance(node_type, int):
-                node_type = "C" if node_type == 1 else "P"
-                
-            coreness_value = coreness_list[i]
+        for node in graph.nodes():
+            node_type = string_classifications[node]
+            coreness_value = coreness_values[node]
             node_degree = degrees.get(node, 0)
             
             graph_data["nodes"].append({
@@ -272,14 +235,11 @@ async def analyze_uploaded_graph(
                 "type": node_type,
                 "coreness": float(coreness_value),
                 "degree": node_degree,
-                "betweenness": betweenness.get(node, 0.0),
                 "closeness": closeness.get(node, 0.0)
             })
             
-        # Add edges
         for edge in graph.edges():
             source, target = edge
-            # Get edge data if available
             edge_data = graph.get_edge_data(source, target) or {}
             weight = edge_data.get('weight', 1.0)
             
@@ -290,7 +250,23 @@ async def analyze_uploaded_graph(
                 "weight": float(weight)
             })
         
-        # Prepare the algorithm parameters for response
+        print("Finding top nodes...")
+        top_core_nodes = sorted(
+            [node for node in graph_data["nodes"] if node["type"] == "C"],
+            key=lambda node: node["coreness"], 
+            reverse=True
+        )[:5]
+
+        top_periphery_nodes = sorted(
+            [node for node in graph_data["nodes"] if node["type"] == "P"],
+            key=lambda node: node["coreness"]
+        )[:5]
+
+        top_nodes_result = {
+            "top_core_nodes": top_core_nodes,
+            "top_periphery_nodes": top_periphery_nodes
+        }
+
         algorithm_params = {}
         if algorithm == "rombach":
             algorithm_params = {
@@ -319,8 +295,7 @@ async def analyze_uploaded_graph(
             "node_csv_file": node_csv_file,
             "edge_csv_file": edge_csv_file,
             "gdf_file": gdf_file,
-            "image_file": image_file,
-            "graph_data": graph_data
+            "graph_data": graph_data,
         })
         
     except HTTPException as he:
@@ -329,15 +304,14 @@ async def analyze_uploaded_graph(
         print(f"Unexpected error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
+
 @app.get("/download/{filename}")
 async def download_file(filename: str):
     file_path = os.path.join(output_dir, filename)
     if os.path.exists(file_path):
-        # Set appropriate media type based on file extension
         ext = filename.split(".")[-1].lower()
-        media_type = 'application/octet-stream'  # Default
+        media_type = 'application/octet-stream'
         
-        # Define media types for common extensions
         if ext == 'png':
             media_type = 'image/png'
         elif ext == 'jpg' or ext == 'jpeg':
@@ -347,14 +321,12 @@ async def download_file(filename: str):
         elif ext == 'gdf':
             media_type = 'text/plain'
         
-        # Create response with appropriate headers
         response = FileResponse(
             path=file_path,
             filename=filename,
             media_type=media_type
         )
         
-        # Force download by setting Content-Disposition header
         response.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
         
         return response

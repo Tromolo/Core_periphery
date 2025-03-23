@@ -19,7 +19,8 @@ import {
   CardMedia,
   CardActionArea,
   Divider,
-  CardActions
+  CardActions,
+  CircularProgress
 } from '@mui/material';
 import { 
   Home as HomeIcon, 
@@ -28,7 +29,7 @@ import {
   ArrowForward as ArrowForwardIcon
 } from '@mui/icons-material';
 import GraphUploader from "./components/GraphUploader";
-import GraphVisualizer from "./components/GraphVisualizer";
+import GraphVisualizer from './components/graph-visualizer';
 import GraphStats from "./components/GraphStats";
 import CommunityAnalysis from "./components/CommunityAnalysis";
 import ConnectedComponentsChart from "./components/ConnectedComponentsChart";
@@ -86,13 +87,25 @@ const theme = createTheme({
 function App() {
   const [currentView, setCurrentView] = useState('home');
   const [graphData, setGraphData] = useState(null);
+  const [communityData, setCommunityData] = useState(null);
+  const [fileInfo, setFileInfo] = useState(null);
   const [algorithmMetrics, setAlgorithmMetrics] = useState(null);
   const [nodeCsvFile, setNodeCsvFile] = useState(null);
   const [edgeCsvFile, setEdgeCsvFile] = useState(null);
   const [gdfFile, setGdfFile] = useState(null);
-  const [networkMetrics, setNetworkMetrics] = useState(null);
-  const [communityData, setCommunityData] = useState(null);
-  const [selectedTab, setSelectedTab] = useState(0);
+  const [tabValue, setTabValue] = useState(0);
+  
+  // Create a constant for the initial networkMetrics state
+  const initialNetworkMetricsState = {
+    updateStats: (stats) => {
+      setNetworkMetrics(prevMetrics => ({
+        ...prevMetrics,
+        ...stats
+      }));
+    }
+  };
+  
+  const [networkMetrics, setNetworkMetrics] = useState(initialNetworkMetricsState);
 
   const navigateTo = (view) => {
     setCurrentView(view);
@@ -104,9 +117,10 @@ function App() {
     setNodeCsvFile(null);
     setEdgeCsvFile(null);
     setGdfFile(null);
-    setNetworkMetrics(null);
+    // Reset networkMetrics to its initial state instead of null
+    setNetworkMetrics(initialNetworkMetricsState);
     setCommunityData(null);
-    setSelectedTab(0);
+    setTabValue(0);
   };
 
   const handleGraphUpload = (data) => {
@@ -115,193 +129,41 @@ function App() {
   };
 
   const handleBasicNetworkUpload = (data) => {
-    console.log('Basic network upload data:', data);
-    if (!data.network_metrics) {
-      console.error('No network metrics in upload response');
-      return;
-    }
-
-    // Set network metrics
-    setNetworkMetrics(data.network_metrics);
-    
-    // Set community data
+    setGraphData(data.graph_data);
     setCommunityData(data.community_data);
+    setFileInfo(data);
     
-    // Process graph data for visualization
-    if (data.graph_data && data.graph_data.nodes && data.graph_data.edges) {
-      console.log(`Graph data received: ${data.graph_data.nodes.length} nodes, ${data.graph_data.edges.length} edges`);
-      
-      // Set graph data with nodes and edges for visualization
-      setGraphData({
-        nodes: data.graph_data.nodes,
-        edges: data.graph_data.edges,
-        filename: data.filename,
-        filesize: data.filesize,
-        filetype: data.filetype,
-        // If degree distribution is available, add it to the graph data
-        degree_distribution: data.degree_distribution || []
-      });
-    } else {
-      // Set graph data with just the file information
-      setGraphData({
-        filename: data.filename,
-        filesize: data.filesize,
-        filetype: data.filetype
-      });
-    }
+    // Make sure to safely merge the new metrics with the updateStats function
+    setNetworkMetrics(prevMetrics => ({
+      ...data.network_metrics,
+      updateStats: prevMetrics.updateStats
+    }));
     
-    // Navigate to the basic network view tab
-    setSelectedTab(0);
+    // Immediately navigate to the basic view after receiving data
+    navigateTo('basic');
+    
+    // Set the tab value
+    setTabValue(0);
   };
 
   const handleAnalysis = (data) => {
-    console.log('Analysis data received:', data);
-    if (!data) {
-      console.error('No analysis data received');
-      return;
-    }
-
-    // Check if we have graph structure data
-    if (data.graph_data) {
-      console.log(`Graph data received: ${data.graph_data.nodes.length} nodes, ${data.graph_data.edges.length} edges`);
-    } else {
-      console.warn('No graph structure data received from backend');
-    }
-
-    // Process classifications - convert numeric classifications to 'C' and 'P' format
-    const processedClassifications = {};
-    if (data.classifications) {
-      // Check if classifications is an array of numbers (0/1) or strings ('C'/'P')
-      const isNumericClassification = typeof data.classifications[0] === 'number';
-      
-      data.classifications.forEach((val, index) => {
-        if (isNumericClassification) {
-          // Convert numeric classifications (1/0) to string format ('C'/'P')
-          processedClassifications[index] = val === 1 ? 'C' : 'P';
-        } else {
-          // Already in string format
-          processedClassifications[index] = val;
-        }
-      });
-      
-      console.log(`Processed ${Object.keys(processedClassifications).length} classifications`);
-      
-      // Log the distribution of core vs periphery nodes
-      const coreCount = Object.values(processedClassifications).filter(c => c === 'C').length;
-      const peripheryCount = Object.values(processedClassifications).filter(c => c === 'P').length;
-      console.log(`Classification distribution: ${coreCount} core nodes, ${peripheryCount} periphery nodes`);
-    }
-
-    // Create a properly formatted graph data object for the GraphVisualizer
-    const formattedGraphData = {
-      nodes: [],
-      edges: []
-    };
-
-    // If we have graph_data from the backend, use it directly
-    if (data.graph_data && data.graph_data.nodes && data.graph_data.edges) {
-      formattedGraphData.nodes = data.graph_data.nodes;
-      formattedGraphData.edges = data.graph_data.edges;
-    } 
-    // Otherwise, create nodes and edges from classifications and coreness values
-    else if (data.classifications) {
-      // Create nodes based on classifications
-      data.classifications.forEach((classification, index) => {
-        const nodeType = typeof classification === 'number' 
-          ? (classification === 1 ? 'C' : 'P')
-          : classification;
-        
-        // Find coreness value from top_nodes if available
-        let corenessValue = nodeType === 'C' ? 0.8 : 0.2; // Default values
-        
-        if (data.top_nodes) {
-          const topNode = data.top_nodes.find(node => node.id === index);
-          if (topNode) {
-            corenessValue = topNode.coreness;
-          }
-        }
-        
-        formattedGraphData.nodes.push({
-          id: index.toString(),
-          type: nodeType,
-          coreness: corenessValue
-        });
-      });
-      
-      // Create some basic edges based on node types
-      // This is a fallback if no edge data is provided
-      if (data.network_metrics && data.network_metrics.edge_count > 0) {
-        console.log('No edge data provided, but network has edges. Creating placeholder edges.');
-        // Create placeholder edges - this is not ideal but better than no visualization
-        const coreNodes = formattedGraphData.nodes.filter(node => node.type === 'C').map(node => node.id);
-        const peripheryNodes = formattedGraphData.nodes.filter(node => node.type === 'P').map(node => node.id);
-        
-        // Connect core nodes to each other
-        for (let i = 0; i < coreNodes.length; i++) {
-          for (let j = i + 1; j < coreNodes.length; j++) {
-            if (Math.random() < 0.7) { // High probability for core-core connections
-              formattedGraphData.edges.push({
-                id: `${coreNodes[i]}-${coreNodes[j]}`,
-                source: coreNodes[i],
-                target: coreNodes[j]
-              });
-            }
-          }
-        }
-        
-        // Connect core nodes to periphery nodes
-        for (let i = 0; i < coreNodes.length; i++) {
-          for (let j = 0; j < peripheryNodes.length; j++) {
-            if (Math.random() < 0.3) { // Medium probability for core-periphery connections
-              formattedGraphData.edges.push({
-                id: `${coreNodes[i]}-${peripheryNodes[j]}`,
-                source: coreNodes[i],
-                target: peripheryNodes[j]
-              });
-            }
-          }
-        }
-        
-        // Connect periphery nodes to each other
-        for (let i = 0; i < peripheryNodes.length; i++) {
-          for (let j = i + 1; j < peripheryNodes.length; j++) {
-            if (Math.random() < 0.1) { // Low probability for periphery-periphery connections
-              formattedGraphData.edges.push({
-                id: `${peripheryNodes[i]}-${peripheryNodes[j]}`,
-                source: peripheryNodes[i],
-                target: peripheryNodes[j]
-              });
-            }
-          }
-        }
-      }
-    }
-    
-    console.log(`Formatted graph data: ${formattedGraphData.nodes.length} nodes, ${formattedGraphData.edges.length} edges`);
-    
-    // Update graph data with the formatted data
-    setGraphData(formattedGraphData);
-
-    // Set algorithm metrics
-    setAlgorithmMetrics({
-      node_count: data.network_metrics?.node_count,
-      edge_count: data.network_metrics?.edge_count,
-      core_stats: data.core_stats,
-      algorithm_params: data.algorithm_params,
-      top_nodes: data.top_nodes,
-      image_file: data.image_file
-    });
-
-    // Set CSV and GDF files for download
+    setGraphData(data.graph_data);
+    setAlgorithmMetrics(data);
     setNodeCsvFile(data.node_csv_file);
     setEdgeCsvFile(data.edge_csv_file);
     setGdfFile(data.gdf_file);
     
-    console.log('Updated graph data and metrics');
+    // Make sure to safely merge the new metrics with the updateStats function
+    setNetworkMetrics(prevMetrics => ({
+      ...data.network_metrics,
+      updateStats: prevMetrics.updateStats
+    }));
+    
+    navigateTo('core-periphery');
   };
 
   const handleTabChange = (event, newValue) => {
-    setSelectedTab(newValue);
+    setTabValue(newValue);
   };
 
   const renderHomeView = () => (
@@ -472,7 +334,7 @@ function App() {
         </Button>
       </Box>
       
-      {!networkMetrics ? (
+      {!Object.keys(networkMetrics).length > 1 || !networkMetrics.node_count ? (
         <Box>
           <GraphUploader onUpload={handleBasicNetworkUpload} />
         </Box>
@@ -481,7 +343,7 @@ function App() {
           <Box sx={{ mb: 2 }}>
             <Button
               variant="contained"
-              onClick={() => setNetworkMetrics(null)}
+              onClick={() => resetState()}
               sx={{
                 color: 'white',
                 background: 'linear-gradient(45deg, #0d47a1 30%, #1a237e 90%)',
@@ -493,16 +355,26 @@ function App() {
 
           <Grid container spacing={4} sx={{ mb: 4 }}>
             <Grid item xs={12}>
-              <GraphStats 
-                graphData={graphData} 
-                metrics={networkMetrics} 
-                communityData={communityData}
-              />
+              {graphData && graphData.nodes && graphData.nodes.length > 0 ? (
+                <GraphStats 
+                  graphData={graphData} 
+                  metrics={networkMetrics}
+                  communityData={communityData}
+                  networkMetrics={networkMetrics}
+                />
+              ) : (
+                <Box sx={{ p: 4, textAlign: 'center' }}>
+                  <CircularProgress />
+                  <Typography variant="h6" sx={{ mt: 2 }}>
+                    Loading network data...
+                  </Typography>
+                </Box>
+              )}
             </Grid>
           </Grid>
 
           {/* Add Degree Histogram */}
-          {(graphData && graphData.nodes) || (communityData && communityData.graph_data) ? (
+          {graphData && graphData.nodes && graphData.nodes.length > 0 && (
             <Box sx={{ mt: 4, mb: 4 }}>
               <DegreeHistogram 
                 graphData={graphData} 
@@ -510,7 +382,7 @@ function App() {
                 networkMetrics={networkMetrics}
               />
             </Box>
-          ) : null}
+          )}
 
           {networkMetrics?.connected_components && (
             <Box sx={{ mt: 4 }}>
@@ -578,20 +450,31 @@ function App() {
             </Button>
           </Box>
 
-          <Box sx={{ mb: 5 }}>
-            <GraphVisualizer 
-              graphData={graphData} 
-              metrics={algorithmMetrics} 
-              nodeCsvFile={nodeCsvFile}
-              edgeCsvFile={edgeCsvFile}
-              gdfFile={gdfFile}
-              imageFile={algorithmMetrics.image_file}
-            />
-          </Box>
+          {graphData && graphData.nodes && graphData.nodes.length > 0 ? (
+            <>
+              <Box sx={{ mb: 5 }}>
+                <GraphVisualizer 
+                  graphData={graphData} 
+                  metrics={algorithmMetrics} 
+                  nodeCsvFile={nodeCsvFile}
+                  edgeCsvFile={edgeCsvFile}
+                  gdfFile={gdfFile}
+                  imageFile={algorithmMetrics.image_file}
+                />
+              </Box>
 
-          <Box sx={{ mb: 5 }}>
-            <MetricsTable metrics={algorithmMetrics} />
-          </Box>
+              <Box sx={{ mb: 5 }}>
+                <MetricsTable metrics={algorithmMetrics} />
+              </Box>
+            </>
+          ) : (
+            <Box sx={{ p: 4, textAlign: 'center' }}>
+              <CircularProgress />
+              <Typography variant="h6" sx={{ mt: 2 }}>
+                Loading analysis data...
+              </Typography>
+            </Box>
+          )}
         </>
       )}
     </Box>

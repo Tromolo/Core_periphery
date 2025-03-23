@@ -52,6 +52,18 @@ const GraphUploader = ({ onUpload }) => {
         throw new Error(errorData.detail || 'Upload failed');
       }
 
+      // First immediately trigger navigation with a minimal object
+      // This will cause immediate redirection before processing the response
+      onUpload({
+        graph_data: { nodes: [], edges: [] },
+        community_data: { num_communities: 0 },
+        network_metrics: {},
+        filename: file.name, 
+        filesize: file.size,
+        filetype: file.type
+      });
+      
+      // Then continue with data processing in the background
       const data = await response.json();
       console.log('Upload response:', data);
       
@@ -60,6 +72,7 @@ const GraphUploader = ({ onUpload }) => {
       data.filesize = file.size;
       data.filetype = file.type;
       
+      // Update with the real data
       onUpload(data);
       setSuccess(true);
     } catch (err) {

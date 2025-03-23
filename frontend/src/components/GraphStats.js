@@ -193,7 +193,7 @@ const NodeCard = ({ node, index }) => {
   );
 };
 
-const GraphStats = ({ graphData, metrics, communityData }) => {
+const GraphStats = ({ graphData, metrics, communityData, networkMetrics }) => {
   if (!metrics) return null;
   const theme = useTheme();
   const [exportSuccess, setExportSuccess] = useState(false);
@@ -208,6 +208,19 @@ const GraphStats = ({ graphData, metrics, communityData }) => {
       console.error("Error handling download:", error);
     }
   };
+
+  // Get average degree from networkMetrics if available (from DegreeHistogram)
+  const averageDegree = networkMetrics?.basicStats?.avgDegree || 
+                       metrics?.average_degree || 
+                       metrics?.avg_degree || 
+                       '0';
+  
+  // Log values to help debug
+  console.log("GraphStats NetworkMetrics:", {
+    basicStats: networkMetrics?.basicStats,
+    avgDegree: networkMetrics?.basicStats?.avgDegree,
+    metrics_avg: metrics?.average_degree || metrics?.avg_degree
+  });
 
   return (
     <Card sx={{ p: 4, boxShadow: 3, borderRadius: 2 }}>
@@ -267,7 +280,7 @@ const GraphStats = ({ graphData, metrics, communityData }) => {
             </Grid>
             <Grid item xs={12} sm={6}>
               <StatCard 
-                label="Clustering" 
+                label="Clustering coefficient" 
                 value={metrics.clustering}
                 icon={<AccountTree />}
                 color={theme.palette.primary.main}
@@ -277,6 +290,14 @@ const GraphStats = ({ graphData, metrics, communityData }) => {
               <StatCard 
                 label="Assortativity" 
                 value={metrics.assortativity}
+                icon={<Share />}
+                color={theme.palette.primary.main}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <StatCard 
+                label="Average degree" 
+                value={averageDegree}
                 icon={<Share />}
                 color={theme.palette.primary.main}
               />

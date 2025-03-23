@@ -48,7 +48,6 @@ def calculate_network_metrics(graph: nx.Graph) -> Dict[str, Any]:
     """Calculate basic network metrics using parallel processing."""
     try:
         with ThreadPoolExecutor() as executor:
-            # Basic metrics
             futures = {
                 'nodes': executor.submit(lambda: graph.number_of_nodes()),
                 'edges': executor.submit(lambda: graph.number_of_edges()),
@@ -57,13 +56,11 @@ def calculate_network_metrics(graph: nx.Graph) -> Dict[str, Any]:
                 'degree_dist': executor.submit(lambda: [d for n, d in graph.degree()]),
             }
             
-            # Assortativity
             try:
                 futures['assortativity'] = executor.submit(nx.degree_assortativity_coefficient, graph)
             except:
                 futures['assortativity'] = None
             
-            # Collect results
             metrics = {}
             for key, future in futures.items():
                 if future is not None:
@@ -72,7 +69,6 @@ def calculate_network_metrics(graph: nx.Graph) -> Dict[str, Any]:
                     except Exception:
                         metrics[key] = None
             
-            # Calculate degree statistics
             if metrics['degree_dist']:
                 degree_dist = metrics['degree_dist']
                 metrics.update({
@@ -82,23 +78,19 @@ def calculate_network_metrics(graph: nx.Graph) -> Dict[str, Any]:
                     'degree_std': float(np.std(degree_dist))
                 })
                 
-                # Format degree distribution for frontend
                 from collections import Counter
                 degree_counts = Counter(degree_dist)
                 metrics['degree_distribution'] = [
                     {"degree": k, "count": v} for k, v in sorted(degree_counts.items())
                 ]
                 
-            # Remove degree_dist from final metrics
             metrics.pop('degree_dist', None)
             
-            # Rename keys to match frontend expectations
             if 'nodes' in metrics:
                 metrics['node_count'] = metrics.pop('nodes')
             if 'edges' in metrics:
                 metrics['edge_count'] = metrics.pop('edges')
             
-            # Add connected components analysis
             metrics['connected_components'] = calculate_connected_components(graph)
             
             return metrics
@@ -109,7 +101,6 @@ def calculate_network_metrics(graph: nx.Graph) -> Dict[str, Any]:
 
 
 def calculate_connected_components(G):
-    """Calculate connected components statistics."""
     components = list(nx.connected_components(G))
     num_components = len(components)
     
@@ -138,28 +129,14 @@ def calculate_all_network_metrics(graph: nx.Graph, classifications: Dict, corene
     Calculate all network metrics including core-periphery specific metrics.
     """
     try:
-        # Basic network metrics - simplified from the full calculation
-        metrics = {
-            "node_count": graph.number_of_nodes(),
-            "edge_count": graph.number_of_edges(),
-            "density": nx.density(graph),
-            "clustering": nx.average_clustering(graph),
-        }
+        metrics = {}
         
-        # Assortativity calculation
-        try:
-            metrics["assortativity"] = nx.degree_assortativity_coefficient(graph)
-        except:
-            metrics["assortativity"] = None
-
-        # Get core-periphery metrics from the core_stats function
         if pre_calculated_core_stats is not None:
             core_stats = pre_calculated_core_stats
         else:
             from backend.functions import get_core_stats
             core_stats = get_core_stats(graph, classifications)
-        
-        # Add core-periphery metrics
+
         metrics["core_stats"] = {
             "core_size": core_stats["core_size"],
             "periphery_size": core_stats["periphery_size"],
@@ -184,8 +161,8 @@ def calculate_all_network_metrics(graph: nx.Graph, classifications: Dict, corene
             }
         }
         
-        # Add Holme's core-periphery coefficient if cores exist
-        if core_stats["core_size"] > 0:
+        
+        """if core_stats["core_size"] > 0:
             try:
                 from backend.main import compute_core_periphery_coefficient
                 cp_coefficient = compute_core_periphery_coefficient(
@@ -195,9 +172,8 @@ def calculate_all_network_metrics(graph: nx.Graph, classifications: Dict, corene
                 )
                 metrics["core_periphery_metrics"]["cp_coefficient"] = cp_coefficient
             except Exception as e:
-                print(f"Error calculating core-periphery coefficient: {str(e)}")
+                print(f"Error calculating core-periphery coefficient: {str(e)}")"""
 
-        # Add algorithm-specific parameters
         if algorithm == "rombach":
             metrics["rombach_params"] = {
                 "Q": sum([v for v in coreness.values() if isinstance(v, (int, float))]) / max(1, len(coreness)),
@@ -223,8 +199,6 @@ def calculate_all_network_metrics(graph: nx.Graph, classifications: Dict, corene
         traceback.print_exc()
         return {
             "error": f"Failed to calculate metrics: {str(e)}",
-            "node_count": graph.number_of_nodes(),
-            "edge_count": graph.number_of_edges()
         }
 
 
@@ -254,107 +228,48 @@ def calculate_centrality_metrics(graph):
 def prepare_community_analysis_data(graph):
     """
     Prepare community analysis data for visualization in the frontend.
-    Returns community statistics, visualization, and membership information.
+    Returns community statistics and membership information for client-side visualization.
     """
     try:
-        # Detect communities using Louvain method
         communities = community_louvain.best_partition(graph)
         
-        # Calculate modularity score
         modularity = community_louvain.modularity(communities, graph)
         
-        # Count community sizes
         community_sizes = Counter(communities.values())
         
-        # Prepare size distribution for visualization
         size_distribution = [
             {"community": str(community), "size": size} 
             for community, size in sorted(community_sizes.items())
         ]
         
-        # Calculate basic statistics
         num_communities = len(community_sizes)
         community_size_values = list(community_sizes.values())
         mean_size = np.mean(community_size_values)
         max_size = max(community_size_values)
         min_size = min(community_size_values)
         
-        # Create visualization
-        plt.figure(figsize=(10, 8))
-        pos = nx.spring_layout(graph, seed=42)
-        
-        # Create color map for communities
-        cmap = plt.cm.get_cmap("tab20", num_communities)
-        community_colors = {}
-        
-        for node, community_id in communities.items():
-            if community_id not in community_colors:
-                community_colors[community_id] = cmap(community_id % num_communities)
-                
-        node_colors = [community_colors[communities[node]] for node in graph.nodes()]
-        
-        nx.draw_networkx(
-            graph,
-            pos=pos,
-            node_color=node_colors,
-            with_labels=False,
-            node_size=80,
-            edge_color="gray",
-            alpha=0.7
-        )
-        
-        plt.title("Community Structure Visualization")
-        plt.axis("off")
-        
-        # Get the current working directory and construct absolute path
-        import os
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        # Go up one level to the project root and then to static
-        output_dir = os.path.abspath(os.path.join(current_dir, "..", "static"))
-        
-        try:
-            # Ensure the directory exists
-            os.makedirs(output_dir, exist_ok=True)
-            
-            # Generate a unique filename
-            community_viz_file = f"{uuid.uuid4()}_community.png"
-            full_path = os.path.join(output_dir, community_viz_file)
-            
-            # Save the figure
-            plt.savefig(full_path, dpi=300, bbox_inches="tight")
-            plt.close()
-        except Exception as save_error:
-            print(f"Error saving visualization: {str(save_error)}")
-            community_viz_file = None
-        
-        # Prepare graph data for Sigma.js visualization
         graph_data = {
             "nodes": [],
             "edges": [],
             "communities": {}
         }
         
-        # Calculate node degrees
         degrees = dict(graph.degree())
         
-        # Add nodes with positions from the layout
         for node in graph.nodes():
-            node_id = str(node)  # Convert to string for JSON compatibility
+            node_id = str(node)
             community_id = communities[node]
             node_degree = degrees.get(node, 0)
             
             graph_data["nodes"].append({
                 "id": node_id,
                 "label": node_id,
-                "size": node_degree + 3,  # Size based on degree
-                "degree": node_degree,  # Add degree explicitly for histogram
-                "x": float(pos[node][0]),  # Convert numpy values to Python floats
-                "y": float(pos[node][1]),
+                "size": node_degree + 3, 
+                "degree": node_degree, 
                 "community": community_id
             })
             graph_data["communities"][node_id] = community_id
         
-        # Add edges
         for source, target in graph.edges():
             graph_data["edges"].append({
                 "source": str(source),
@@ -362,7 +277,6 @@ def prepare_community_analysis_data(graph):
                 "weight": 1  # Default weight
             })
         
-        # Return data in the format expected by the frontend
         return {
             "num_communities": num_communities,
             "mean_size": round(mean_size, 2),
@@ -370,9 +284,8 @@ def prepare_community_analysis_data(graph):
             "min_size": min_size,
             "modularity": round(modularity, 3),
             "size_distribution": size_distribution,
-            "visualization_file": community_viz_file,
             "community_membership": {str(node): community for node, community in communities.items()},
-            "graph_data": graph_data  # Add graph data for Sigma.js
+            "graph_data": graph_data
         }
     except Exception as e:
         print(f"Error in community analysis: {str(e)}")

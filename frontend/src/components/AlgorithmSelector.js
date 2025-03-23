@@ -116,10 +116,7 @@ const AlgorithmSelector = ({ graphData, onAnalysis, onUpload }) => {
         throw new Error(errorData.detail || errorData.error || 'Analysis failed');
       }
 
-      const data = await response.json();
-      console.log('Analysis response:', data);
-      
-      // Update the graph data with the file information
+      // Immediately trigger navigation with placeholder data
       if (onUpload) {
         onUpload({
           filename: file.name,
@@ -128,7 +125,21 @@ const AlgorithmSelector = ({ graphData, onAnalysis, onUpload }) => {
         });
       }
       
-      // Pass the analysis results to the parent component
+      // Provide minimal placeholder data to trigger immediate navigation
+      onAnalysis({
+        graph_data: { nodes: [], edges: [] },
+        network_metrics: {},
+        node_csv_file: null,
+        edge_csv_file: null,
+        gdf_file: null,
+        image_file: null
+      });
+      
+      // Continue processing the actual data in the background
+      const data = await response.json();
+      console.log('Analysis response:', data);
+      
+      // Pass the complete analysis results to the parent component
       onAnalysis(data);
       setSuccess(true);
     } catch (err) {
