@@ -14,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.responses import FileResponse
 from pydantic import BaseModel
 
-from .functions import load_graph_file, get_algorithm_function, get_node_classifications_and_coreness, generate_csv, generate_edges_csv, generate_gdf
+from .functions import load_graph_file, get_algorithm_function, get_node_classifications_and_coreness, generate_csv, generate_edges_csv, generate_gdf, get_core_stats
 from .Metrics import calculate_all_network_metrics, calculate_network_metrics, calculate_connected_components, prepare_community_analysis_data
 
 from contextlib import asynccontextmanager
@@ -123,17 +123,17 @@ async def analyze_uploaded_graph(
     beta: float = Form(0.6),
     num_runs: int = Form(10),
     num_iterations: int = Form(100),
-    threshold: float = Form(0.05)
+    threshold: float = Form(0.05),
+    calculate_closeness: bool = Form(False),
+    calculate_betweenness: bool = Form(False)
 ):
+    start_time = time.time()
     try:
         try:
-            print("Loading graph file...")
             graph = await load_graph_file(file)
-            print(f"Graph loaded successfully: {graph.number_of_nodes()} nodes, {graph.number_of_edges()} edges")
         except Exception as e:
-            print(f"Error loading file: {str(e)}")
             raise HTTPException(status_code=400, detail=f"Error loading file: {str(e)}")
-        
+
         params = {}
         if algorithm == 'rombach':
             params = {
@@ -153,66 +153,204 @@ async def analyze_uploaded_graph(
         else:
             raise HTTPException(status_code=400, detail=f"Invalid algorithm: {algorithm}")
         
-        print(f"Processing graph with {algorithm} algorithm...")
-
         algorithm_func = get_algorithm_function(algorithm)
         classifications, coreness = algorithm_func(graph, **params)
-
-        string_classifications, coreness_values = get_node_classifications_and_coreness(graph, classifications, coreness)
         
-        if isinstance(classifications, dict):
-            classifications_list = [classifications.get(node, 0) for node in graph.nodes()]
-        else:
-            nodes = list(graph.nodes())
-            node_to_idx = {node: idx for idx, node in enumerate(nodes)}
-            classifications_list = [classifications[node_to_idx.get(node, -1)] if 0 <= node_to_idx.get(node, -1) < len(classifications) else 0 
-                                  for node in graph.nodes()]
-                
-        core_count = sum(1 for c in classifications_list if c > 0.5)
-        periphery_count = len(classifications_list) - core_count
-        print(f"Classification conversion: {core_count} core nodes, {periphery_count} periphery nodes")
-
-        from backend.functions import get_core_stats
-        print("Computing core-periphery statistics...")
-        core_stats = get_core_stats(graph, string_classifications)
-        
-        print("Computing node metrics...")
         degrees = dict(graph.degree())
-        try:
-            print("Computing closeness centrality...")
-            closeness = nx.closeness_centrality(graph)
-        except Exception as e:
-            closeness = {node: 0.0 for node in graph.nodes()}
-
-        print("Generating output files...")
         
+        closeness = {}
+        betweenness = {}
+        centrality_summary = {}
+        
+        core_nodes = set(node for node, cls in classifications.items() if cls == 'C')
+        periphery_nodes = set(graph.nodes()) - core_nodes
+
+        edge_types = {}
+        core_core_edges = 0
+        core_periphery_edges = 0
+        periphery_periphery_edges = 0
+        
+        for u, v in graph.edges():
+            if u in core_nodes:
+                if v in core_nodes:
+                    edge_type = "C-C"
+                    core_core_edges += 1
+                else:
+                    edge_type = "C-P"
+                    core_periphery_edges += 1
+            else:
+                if v in core_nodes:
+                    edge_type = "P-C"
+                    core_periphery_edges += 1
+                else:
+                    edge_type = "P-P"
+                    periphery_periphery_edges += 1
+            edge_types[(u, v)] = edge_type
+            edge_types[(v, u)] = edge_type
+        
+        total_nodes = len(graph.nodes())
+        total_edges = graph.number_of_edges()
+        core_percentage = (len(core_nodes) / total_nodes * 100) if total_nodes > 0 else 0
+        
+        max_core_edges = len(core_nodes) * (len(core_nodes) - 1) / 2
+        core_density = core_core_edges / max_core_edges if max_core_edges > 0 else 0.0
+        
+        periphery_core_connectivity = (core_periphery_edges / len(periphery_nodes)) if len(periphery_nodes) > 0 else 0.0
+        
+        core_core_percentage = (core_core_edges / total_edges * 100) if total_edges > 0 else 0
+        core_periphery_percentage = (core_periphery_edges / total_edges * 100) if total_edges > 0 else 0
+        periphery_periphery_percentage = (periphery_periphery_edges / total_edges * 100) if total_edges > 0 else 0
+        
+        periphery_isolation = periphery_periphery_percentage
+        core_periphery_ratio = (core_periphery_edges / total_edges) if total_edges > 0 else 0
+        
+        if core_density >= 0.8:
+            core_density_interpretation = "Very high density - strongly connected core"
+        elif core_density >= 0.6:
+            core_density_interpretation = "High density - well-connected core"
+        elif core_density >= 0.4:
+            core_density_interpretation = "Moderate density - reasonably connected core"
+        elif core_density >= 0.2:
+            core_density_interpretation = "Low density - sparsely connected core"
+        else:
+            core_density_interpretation = "Very low density - poorly connected core"
+        
+        if core_periphery_ratio >= 0.6:
+            cp_ratio_interpretation = "High integration between core and periphery"
+        elif core_periphery_ratio >= 0.4:
+            cp_ratio_interpretation = "Moderate integration between core and periphery"
+        elif core_periphery_ratio >= 0.2:
+            cp_ratio_interpretation = "Low integration between core and periphery"
+        else:
+            cp_ratio_interpretation = "Very low integration between core and periphery"
+        
+        max_core_core = len(core_nodes) * (len(core_nodes) - 1) / 2
+        max_core_periphery = len(core_nodes) * len(periphery_nodes)
+        max_periphery_periphery = len(periphery_nodes) * (len(periphery_nodes) - 1) / 2
+        
+        core_core_match = core_core_edges
+        core_periphery_match = core_periphery_edges
+        periphery_periphery_match = max_periphery_periphery - periphery_periphery_edges
+        
+        total_pattern_score = core_core_match + core_periphery_match + periphery_periphery_match
+        max_pattern_score = max_core_core + max_core_periphery + max_periphery_periphery
+        
+        ideal_pattern_match = (total_pattern_score / max_pattern_score * 100) if max_pattern_score > 0 else 0
+        
+        if ideal_pattern_match >= 90:
+            pattern_match_interpretation = "Excellent match to ideal core-periphery structure"
+        elif ideal_pattern_match >= 75:
+            pattern_match_interpretation = "Good match to ideal core-periphery structure"
+        elif ideal_pattern_match >= 50:
+            pattern_match_interpretation = "Moderate match to ideal core-periphery structure"
+        elif ideal_pattern_match >= 25:
+            pattern_match_interpretation = "Weak match to ideal core-periphery structure"
+        else:
+            pattern_match_interpretation = "Poor match to ideal core-periphery structure"
+        
+        structure_quality = "uncertain"
+        if core_density > 0.7 and periphery_periphery_percentage < 10:
+            structure_quality = "strong"
+        elif core_density > 0.4 and periphery_periphery_percentage < 20:
+            structure_quality = "moderate"
+        elif periphery_periphery_percentage > core_core_percentage or periphery_periphery_percentage > core_periphery_percentage:
+            structure_quality = "weak"
+        else:
+            structure_quality = "mixed"
+
+        core_stats = {
+            "core_size": len(core_nodes),
+            "periphery_size": len(periphery_nodes),
+            "core_percentage": core_percentage,
+            "core_density": core_density,
+            "core_density_interpretation": core_density_interpretation,
+            "periphery_core_connectivity": periphery_core_connectivity,
+            "periphery_isolation": periphery_isolation,
+            "core_periphery_ratio": core_periphery_ratio,
+            "cp_ratio_interpretation": cp_ratio_interpretation,
+            "connection_patterns": {
+                "core_core": {
+                    "count": core_core_edges,
+                    "percentage": core_core_percentage
+                },
+                "core_periphery": {
+                    "count": core_periphery_edges,
+                    "percentage": core_periphery_percentage
+                },
+                "periphery_periphery": {
+                    "count": periphery_periphery_edges,
+                    "percentage": periphery_periphery_percentage
+                }
+            },
+            "ideal_pattern_match": ideal_pattern_match,
+            "pattern_match_interpretation": pattern_match_interpretation,
+            "structure_quality": structure_quality
+        }
+        
+        if calculate_closeness:
+            try:
+                print("Computing closeness centrality...")
+                closeness = nx.closeness_centrality(graph)
+                centrality_values = list(closeness.values())
+                if centrality_values:
+                    centrality_summary["closeness"] = {
+                        "avg": sum(centrality_values) / len(centrality_values),
+                        "max": max(centrality_values),
+                        "min": min(centrality_values)
+                    }
+                else:
+                    centrality_summary["closeness"] = {"avg": 0, "max": 0, "min": 0}
+            except Exception as e:
+                print(f"Warning: Failed to compute closeness centrality: {str(e)}")
+                centrality_summary["closeness"] = {"avg": 0, "max": 0, "min": 0}
+                closeness = {node: 0.0 for node in graph.nodes()}
+
+        if calculate_betweenness:
+            try:
+                print("Computing betweenness centrality...")
+                betweenness = nx.betweenness_centrality(graph)
+                centrality_values = list(betweenness.values())
+                if centrality_values:
+                    centrality_summary["betweenness"] = {
+                        "avg": sum(centrality_values) / len(centrality_values),
+                        "max": max(centrality_values),
+                        "min": min(centrality_values)
+                    }
+                else:
+                    centrality_summary["betweenness"] = {"avg": 0, "max": 0, "min": 0}
+            except Exception as e:
+                print(f"Warning: Failed to compute betweenness centrality: {str(e)}")
+                centrality_summary["betweenness"] = {"avg": 0, "max": 0, "min": 0}
+                betweenness = {node: 0.0 for node in graph.nodes()}
+
         node_csv_file = generate_csv(
             graph, 
-            classifications, 
-            coreness, 
-            string_classifications=string_classifications,
-            coreness_values=coreness_values
+            degrees,
+            string_classifications=classifications,
+            coreness_values=coreness,
+            calculate_closeness=calculate_closeness,
+            calculate_betweenness=calculate_betweenness,
+            pre_calculated_closeness=closeness,
+            pre_calculated_betweenness=betweenness
         )
 
         edge_csv_file = generate_edges_csv(
-            graph, 
-            classifications, 
-            coreness,
-            string_classifications=string_classifications,
-            coreness_values=coreness_values
+            graph,
+            string_classifications=classifications,
+            coreness_values=coreness,
+            pre_calculated_edge_types=edge_types
         )
         
         gdf_file = generate_gdf(
-            graph, 
-            classifications, 
-            coreness,
+            graph,
             degrees,
-            closeness,
-            string_classifications=string_classifications,
-            coreness_values=coreness_values
+            pre_calculated_closeness=closeness if calculate_closeness else None,
+            pre_calculated_betweenness=betweenness if calculate_betweenness else None,
+            string_classifications=classifications,
+            coreness_values=coreness,
+            pre_calculated_edge_types=edge_types
         )
-        
-        print("Computing network metrics...")
+
         network_metrics = calculate_all_network_metrics(
             graph, 
             classifications, 
@@ -221,23 +359,25 @@ async def analyze_uploaded_graph(
             params, 
             pre_calculated_core_stats=core_stats
         )
-                
-        print("Preparing graph data response...")
+
         graph_data = {"nodes": [], "edges": []}
         
         for node in graph.nodes():
-            node_type = string_classifications[node]
-            coreness_value = coreness_values[node]
-            node_degree = degrees.get(node, 0)
-            
-            graph_data["nodes"].append({
+            node_data = {
                 "id": str(node),
-                "type": node_type,
-                "coreness": float(coreness_value),
-                "degree": node_degree,
-                "closeness": closeness.get(node, 0.0)
-            })
+                "type": classifications[node],
+                "coreness": float(coreness[node]),
+                "degree": degrees.get(node, 0),
+            }
             
+            if calculate_closeness:
+                node_data["closeness"] = closeness.get(node, 0.0)
+                
+            if calculate_betweenness:
+                node_data["betweenness"] = betweenness.get(node, 0.0)
+            
+            graph_data["nodes"].append(node_data)
+
         for edge in graph.edges():
             source, target = edge
             edge_data = graph.get_edge_data(source, target) or {}
@@ -250,22 +390,19 @@ async def analyze_uploaded_graph(
                 "weight": float(weight)
             })
         
-        print("Finding top nodes...")
-        top_core_nodes = sorted(
-            [node for node in graph_data["nodes"] if node["type"] == "C"],
-            key=lambda node: node["coreness"], 
-            reverse=True
-        )[:5]
+        core_nodes_data = [node for node in graph_data["nodes"] if node["type"] == "C"]
+        periphery_nodes_data = [node for node in graph_data["nodes"] if node["type"] == "P"]
 
-        top_periphery_nodes = sorted(
-            [node for node in graph_data["nodes"] if node["type"] == "P"],
-            key=lambda node: node["coreness"]
-        )[:5]
+        top_core_nodes = sorted(core_nodes_data, key=lambda node: node["coreness"], reverse=True)[:5]
+        top_periphery_nodes = sorted(periphery_nodes_data, key=lambda node: node["coreness"])[:5]
 
         top_nodes_result = {
             "top_core_nodes": top_core_nodes,
             "top_periphery_nodes": top_periphery_nodes
         }
+
+        if calculate_closeness or calculate_betweenness:
+            top_nodes_result["centrality_summary"] = centrality_summary
 
         algorithm_params = {}
         if algorithm == "rombach":
@@ -283,12 +420,11 @@ async def analyze_uploaded_graph(
             algorithm_params = {
                 "num_runs": params.get('num_runs', 10)
             }
-        
-        print("Core-periphery analysis completed successfully")
-        
+        end_time = time.time()
+        execution_time = end_time - start_time
+        print(f"Execution time: {execution_time:.2f} seconds")
         return JSONResponse(content={
             "message": f"Core-periphery analysis with {algorithm} algorithm completed successfully",
-            "classifications": classifications_list,
             "network_metrics": network_metrics,
             "algorithm_params": algorithm_params,
             "top_nodes": top_nodes_result,

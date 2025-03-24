@@ -133,10 +133,7 @@ def calculate_all_network_metrics(graph: nx.Graph, classifications: Dict, corene
         
         if pre_calculated_core_stats is not None:
             core_stats = pre_calculated_core_stats
-        else:
-            from backend.functions import get_core_stats
-            core_stats = get_core_stats(graph, classifications)
-
+            
         metrics["core_stats"] = {
             "core_size": core_stats["core_size"],
             "periphery_size": core_stats["periphery_size"],
@@ -161,36 +158,28 @@ def calculate_all_network_metrics(graph: nx.Graph, classifications: Dict, corene
             }
         }
         
-        
-        """if core_stats["core_size"] > 0:
-            try:
-                from backend.main import compute_core_periphery_coefficient
-                cp_coefficient = compute_core_periphery_coefficient(
-                    graph, 
-                    [node for node, type in classifications.items() if type == 'C'], 
-                    [node for node, type in classifications.items() if type == 'P']
-                )
-                metrics["core_periphery_metrics"]["cp_coefficient"] = cp_coefficient
-            except Exception as e:
-                print(f"Error calculating core-periphery coefficient: {str(e)}")"""
-
-        if algorithm == "rombach":
-            metrics["rombach_params"] = {
-                "Q": sum([v for v in coreness.values() if isinstance(v, (int, float))]) / max(1, len(coreness)),
-                "alpha": algorithm_params.get('alpha', 0.0),
-                "beta": algorithm_params.get('beta', 0.0)
-            }
-        elif algorithm == "holme":
-            metrics["holme_params"] = {
-                "Q": sum([v for v in coreness.values() if isinstance(v, (int, float))]) / max(1, len(coreness)),
-                "num_iterations": algorithm_params.get('num_iterations', 100),
-                "threshold": algorithm_params.get('threshold', 0.05)
-            }
-        elif algorithm == "be":
-            metrics["be_params"] = {
-                "Q": sum([v for v in coreness.values() if isinstance(v, (int, float))]) / max(1, len(coreness)),
-                "num_runs": algorithm_params.get('num_runs', 10)
-            }
+        # Calculate coreness Q value only once and reuse it
+        if any(algorithm == alg for alg in ["rombach", "holme", "be"]):
+            coreness_values = [v for v in coreness.values() if isinstance(v, (int, float))]
+            Q = sum(coreness_values) / max(1, len(coreness_values)) if coreness_values else 0
+            
+            if algorithm == "rombach":
+                metrics["rombach_params"] = {
+                    "Q": Q,
+                    "alpha": algorithm_params.get('alpha', 0.0),
+                    "beta": algorithm_params.get('beta', 0.0)
+                }
+            elif algorithm == "holme":
+                metrics["holme_params"] = {
+                    "Q": Q,
+                    "num_iterations": algorithm_params.get('num_iterations', 100),
+                    "threshold": algorithm_params.get('threshold', 0.05)
+                }
+            elif algorithm == "be":
+                metrics["be_params"] = {
+                    "Q": Q,
+                    "num_runs": algorithm_params.get('num_runs', 10)
+                }
             
         return metrics
     except Exception as e:
@@ -201,29 +190,6 @@ def calculate_all_network_metrics(graph: nx.Graph, classifications: Dict, corene
             "error": f"Failed to calculate metrics: {str(e)}",
         }
 
-
-def calculate_centrality_metrics(graph):
-    """
-    Calculate various centrality metrics using parallel processing.
-    """
-    try:
-        with ThreadPoolExecutor() as executor:
-            betweenness_future = executor.submit(nx.betweenness_centrality, graph)
-            degree_future = executor.submit(lambda g: dict(g.degree()), graph)
-            closeness_future = executor.submit(nx.closeness_centrality, graph)
-            eigenvector_future = executor.submit(nx.eigenvector_centrality_numpy, graph)
-            
-            centrality_metrics = {
-                "betweenness": betweenness_future.result(),
-                "degree": degree_future.result(),
-                "closeness": closeness_future.result(),
-                "eigenvector": eigenvector_future.result()
-            }
-            
-            return centrality_metrics
-    except Exception as e:
-        print(f"Error calculating centrality metrics: {str(e)}")
-        return None
     
 def prepare_community_analysis_data(graph):
     """

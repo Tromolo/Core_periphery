@@ -11,8 +11,23 @@ import {
   TableRow, 
   Paper,
   Grow,
-  Grid
+  Grid,
+  Divider,
+  Chip,
+  Tooltip,
+  LinearProgress
 } from '@mui/material';
+import { 
+  BarChart, 
+  Assessment, 
+  Settings, 
+  Info as InfoIcon, 
+  Check as CheckIcon,
+  Star as StarIcon,
+  StarBorder as StarBorderIcon,
+  Speed as SpeedIcon,
+  Timeline
+} from '@mui/icons-material';
 
 const MetricsTable = ({ metrics }) => {
   if (!metrics) return null;
@@ -87,6 +102,82 @@ const MetricsTable = ({ metrics }) => {
     return "";
   };
 
+  const getAlgorithmParams = () => {
+    if (metrics.algorithm_params?.alpha !== undefined) {
+      return metrics.algorithm_params;
+    } else if (metrics.algorithm_params?.num_iterations !== undefined) {
+      return metrics.algorithm_params;
+    } else if (metrics.algorithm_params?.num_runs !== undefined) {
+      // Only BE has num_runs but no alpha or num_iterations
+      return metrics.algorithm_params;
+    }
+    return {};
+  };
+
+  const getDisplayParameters = (params) => {
+    const allowedParams = ['alpha', 'beta', 'num_runs', 'num_iterations', 'threshold'];
+    return Object.entries(params)
+      .filter(([key]) => allowedParams.includes(key))
+      .reduce((obj, [key, value]) => {
+        obj[key] = value;
+        return obj;
+      }, {});
+  };
+
+  const getQualityInterpretation = (value) => {
+    if (value >= 0.8) return 'Excellent';
+    if (value >= 0.6) return 'Good';
+    if (value >= 0.4) return 'Moderate';
+    if (value >= 0.2) return 'Poor';
+    return 'Very Poor';
+  };
+
+  const getQualityColor = (value) => {
+    if (value >= 0.8) return '#4caf50';
+    if (value >= 0.6) return '#8bc34a';
+    if (value >= 0.4) return '#ffc107';
+    if (value >= 0.2) return '#ff9800';
+    return '#f44336';
+  };
+
+  const formatCoreness = (value) => {
+    if (typeof value === 'number') {
+      // Show a maximum of 3 decimal places
+      return value.toFixed(Math.min(3, value.toString().split('.')[1]?.length || 0));
+    }
+    return value;
+  };
+
+  if (!metrics || !metrics.top_nodes) {
+    return <Typography variant="body1">Loading metrics...</Typography>;
+  }
+
+  const params = getAlgorithmParams();
+  const displayParams = getDisplayParameters(params);
+  const algorithmName = getAlgorithmName(metrics);
+
+  // Determine if centrality metrics are available for the node tables
+  const hasCloseness = metrics.top_nodes.top_core_nodes.length > 0 && 
+    metrics.top_nodes.top_core_nodes[0].hasOwnProperty('closeness') && 
+    metrics.top_nodes.top_core_nodes[0].closeness > 0;
+  const hasBetweenness = metrics.top_nodes.top_core_nodes.length > 0 && 
+    metrics.top_nodes.top_core_nodes[0].hasOwnProperty('betweenness') && 
+    metrics.top_nodes.top_core_nodes[0].betweenness > 0;
+
+  // Get centrality metrics from the network_metrics object
+  const hasCentralityMetrics = metrics.network_metrics?.centrality_metrics;
+  const hasClosenessMetrics = hasCentralityMetrics && 
+    metrics.network_metrics.centrality_metrics.avg_closeness !== undefined && 
+    metrics.network_metrics.centrality_metrics.avg_closeness > 0;
+  const hasBetweennessMetrics = hasCentralityMetrics && 
+    metrics.network_metrics.centrality_metrics.avg_betweenness !== undefined && 
+    metrics.network_metrics.centrality_metrics.avg_betweenness > 0;
+
+  // Check if we have actual non-zero metrics to show
+  const hasMeaningfulCloseness = hasClosenessMetrics;
+  const hasMeaningfulBetweenness = hasBetweennessMetrics;
+  const hasAnyCentralityMetrics = hasMeaningfulCloseness || hasMeaningfulBetweenness;
+  
   return (
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
@@ -121,7 +212,7 @@ const MetricsTable = ({ metrics }) => {
           </Typography>
           <Paper sx={{ p: 2, mb: 3, bgcolor: 'rgba(25, 118, 210, 0.08)', borderRadius: 2 }}>
             <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>
-              {getAlgorithmName(metrics)}
+              {algorithmName}
             </Typography>
             <Typography variant="body2" sx={{ mb: 1 }}>
               {getAlgorithmDescription(metrics)}
@@ -253,7 +344,7 @@ const MetricsTable = ({ metrics }) => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {metrics.algorithm_params && Object.entries(metrics.algorithm_params).map(([key, value]) => (
+                {params && Object.entries(params).map(([key, value]) => (
                   <TableRow key={key}>
                     <TableCell>{formatParameterName(key)}</TableCell>
                     <TableCell>{formatParameterValue(value)}</TableCell>
@@ -268,7 +359,7 @@ const MetricsTable = ({ metrics }) => {
             Top Nodes by Coreness and Peripheriness
           </Typography>
           
-          <Grid container spacing={3}>
+          <Grid container spacing={3} sx={{ mb: 4 }}>
             {/* Core Nodes Panel */}
             <Grid item xs={12} md={6}>
               <Paper 
@@ -321,6 +412,12 @@ const MetricsTable = ({ metrics }) => {
                           <TableCell sx={{ fontWeight: 'bold', width: '15%' }}>Type</TableCell>
                           <TableCell sx={{ fontWeight: 'bold', width: '30%' }}>Coreness</TableCell>
                           <TableCell sx={{ fontWeight: 'bold', width: '25%' }}>Degree</TableCell>
+                          {hasCloseness && (
+                            <TableCell sx={{ fontWeight: 'bold' }}>Closeness</TableCell>
+                          )}
+                          {hasBetweenness && (
+                            <TableCell sx={{ fontWeight: 'bold' }}>Betweenness</TableCell>
+                          )}
                         </TableRow>
                       </TableHead>
                       <TableBody>
@@ -333,22 +430,20 @@ const MetricsTable = ({ metrics }) => {
                             <TableRow 
                               key={node.id}
                               sx={{ 
-                                '&:nth-of-type(odd)': { bgcolor: 'rgba(211, 47, 47, 0.03)' },
-                                '&:hover': { bgcolor: 'rgba(211, 47, 47, 0.06)' }
+                                '&:nth-of-type(odd)': { bgcolor: 'rgba(211, 47, 47, 0.04)' },
+                                '&:hover': { bgcolor: 'rgba(211, 47, 47, 0.1)' },
+                                fontWeight: index === 0 ? 'bold' : 'normal'
                               }}
                             >
-                              <TableCell sx={{ fontWeight: index === 0 ? 'bold' : 'normal' }}>
-                                {node.id}
-                              </TableCell>
+                              <TableCell>{node.id}</TableCell>
                               <TableCell>
                                 <Box 
                                   sx={{ 
                                     display: 'inline-block',
-                                    bgcolor: '#d32f2f',
-                                    color: 'white',
-                                    px: 1,
-                                    py: 0.2,
-                                    borderRadius: 1,
+                                    bgcolor: 'rgba(211, 47, 47, 0.1)', 
+                                    color: '#d32f2f',
+                                    p: '3px 8px',
+                                    borderRadius: '10px',
                                     fontSize: '0.75rem',
                                     fontWeight: 'bold'
                                   }}
@@ -374,6 +469,12 @@ const MetricsTable = ({ metrics }) => {
                                 </Box>
                               </TableCell>
                               <TableCell>{node.degree}</TableCell>
+                              {hasCloseness && node.closeness !== undefined && node.closeness > 0 && (
+                                <TableCell>{node.closeness.toFixed(4)}</TableCell>
+                              )}
+                              {hasBetweenness && node.betweenness !== undefined && node.betweenness > 0 && (
+                                <TableCell>{node.betweenness.toFixed(4)}</TableCell>
+                              )}
                             </TableRow>
                           );
                         })}
@@ -436,6 +537,12 @@ const MetricsTable = ({ metrics }) => {
                           <TableCell sx={{ fontWeight: 'bold', width: '15%' }}>Type</TableCell>
                           <TableCell sx={{ fontWeight: 'bold', width: '30%' }}>Coreness</TableCell>
                           <TableCell sx={{ fontWeight: 'bold', width: '25%' }}>Degree</TableCell>
+                          {hasCloseness && (
+                            <TableCell sx={{ fontWeight: 'bold' }}>Closeness</TableCell>
+                          )}
+                          {hasBetweenness && (
+                            <TableCell sx={{ fontWeight: 'bold' }}>Betweenness</TableCell>
+                          )}
                         </TableRow>
                       </TableHead>
                       <TableBody>
@@ -450,22 +557,20 @@ const MetricsTable = ({ metrics }) => {
                             <TableRow 
                               key={node.id}
                               sx={{ 
-                                '&:nth-of-type(odd)': { bgcolor: 'rgba(25, 118, 210, 0.03)' },
-                                '&:hover': { bgcolor: 'rgba(25, 118, 210, 0.06)' }
+                                '&:nth-of-type(odd)': { bgcolor: 'rgba(25, 118, 210, 0.04)' },
+                                '&:hover': { bgcolor: 'rgba(25, 118, 210, 0.1)' },
+                                fontWeight: index === 0 ? 'bold' : 'normal'
                               }}
                             >
-                              <TableCell sx={{ fontWeight: index === 0 ? 'bold' : 'normal' }}>
-                                {node.id}
-                              </TableCell>
+                              <TableCell>{node.id}</TableCell>
                               <TableCell>
                                 <Box 
                                   sx={{ 
                                     display: 'inline-block',
-                                    bgcolor: '#1976d2',
-                                    color: 'white',
-                                    px: 1,
-                                    py: 0.2,
-                                    borderRadius: 1,
+                                    bgcolor: 'rgba(25, 118, 210, 0.1)', 
+                                    color: '#1976d2',
+                                    p: '3px 8px',
+                                    borderRadius: '10px',
                                     fontSize: '0.75rem',
                                     fontWeight: 'bold'
                                   }}
@@ -491,6 +596,12 @@ const MetricsTable = ({ metrics }) => {
                                 </Box>
                               </TableCell>
                               <TableCell>{node.degree}</TableCell>
+                              {hasCloseness && node.closeness !== undefined && node.closeness > 0 && (
+                                <TableCell>{node.closeness.toFixed(4)}</TableCell>
+                              )}
+                              {hasBetweenness && node.betweenness !== undefined && node.betweenness > 0 && (
+                                <TableCell>{node.betweenness.toFixed(4)}</TableCell>
+                              )}
                             </TableRow>
                           );
                         })}
@@ -501,6 +612,166 @@ const MetricsTable = ({ metrics }) => {
               </Paper>
             </Grid>
           </Grid>
+
+          {/* Add Centrality Metrics Section if metrics include centrality data */}
+          {hasAnyCentralityMetrics && (
+            <Box sx={{ mb: 4 }}>
+              <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold', display: 'flex', alignItems: 'center' }}>
+                <Timeline sx={{ mr: 1, color: 'primary.main' }} />
+                Centrality Metrics
+              </Typography>
+              
+              <Grid container spacing={3}>
+                {hasClosenessMetrics && (
+                  <Grid item xs={12} md={6}>
+                    <Paper 
+                      elevation={1} 
+                      sx={{ 
+                        p: 3, 
+                        borderRadius: 2,
+                        border: '1px solid rgba(76, 175, 80, 0.2)',
+                        boxShadow: '0 4px 12px rgba(76, 175, 80, 0.08)',
+                        height: '100%'
+                      }}
+                    >
+                      <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1, color: '#4caf50' }}>
+                        Closeness Centrality
+                      </Typography>
+                      
+                      <Typography variant="body2" sx={{ mb: 2, color: 'text.secondary' }}>
+                        Measures how close a node is to all other nodes in the network. Higher values indicate nodes that can quickly reach all others.
+                      </Typography>
+                      
+                      <Box sx={{ mb: 3 }}>
+                        <Grid container spacing={2}>
+                          {metrics.network_metrics.centrality_metrics.avg_closeness > 0 && (
+                            <Grid item xs={6}>
+                              <Typography variant="body2" sx={{ color: 'text.secondary' }}>Average Closeness:</Typography>
+                              <Typography variant="body1" sx={{ fontWeight: 'medium' }}>
+                                {metrics.network_metrics.centrality_metrics.avg_closeness.toFixed(4)}
+                              </Typography>
+                            </Grid>
+                          )}
+                          {metrics.network_metrics.centrality_metrics.max_closeness > 0 && (
+                            <Grid item xs={6}>
+                              <Typography variant="body2" sx={{ color: 'text.secondary' }}>Max Closeness:</Typography>
+                              <Typography variant="body1" sx={{ fontWeight: 'medium' }}>
+                                {metrics.network_metrics.centrality_metrics.max_closeness.toFixed(4)}
+                              </Typography>
+                            </Grid>
+                          )}
+                        </Grid>
+                      </Box>
+                      
+                      {/* Only show comparison if either value is non-zero */}
+                      {(metrics.network_metrics.centrality_metrics.avg_core_closeness > 0 || 
+                        metrics.network_metrics.centrality_metrics.avg_periphery_closeness > 0) && (
+                        <>
+                          <Typography variant="body2" sx={{ fontWeight: 'medium', mb: 1 }}>Core vs. Periphery Comparison:</Typography>
+                          <Grid container spacing={2}>
+                            {metrics.network_metrics.centrality_metrics.avg_core_closeness > 0 && (
+                              <Grid item xs={6}>
+                                <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                                  <Typography variant="body2" sx={{ color: '#d32f2f', fontWeight: 'medium' }}>Core Nodes:</Typography>
+                                  <Typography variant="body1">
+                                    {metrics.network_metrics.centrality_metrics.avg_core_closeness.toFixed(4)}
+                                  </Typography>
+                                </Box>
+                              </Grid>
+                            )}
+                            {metrics.network_metrics.centrality_metrics.avg_periphery_closeness > 0 && (
+                              <Grid item xs={6}>
+                                <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                                  <Typography variant="body2" sx={{ color: '#0288d1', fontWeight: 'medium' }}>Periphery Nodes:</Typography>
+                                  <Typography variant="body1">
+                                    {metrics.network_metrics.centrality_metrics.avg_periphery_closeness.toFixed(4)}
+                                  </Typography>
+                                </Box>
+                              </Grid>
+                            )}
+                          </Grid>
+                        </>
+                      )}
+                    </Paper>
+                  </Grid>
+                )}
+                
+                {hasBetweennessMetrics && (
+                  <Grid item xs={12} md={6}>
+                    <Paper 
+                      elevation={1} 
+                      sx={{ 
+                        p: 3, 
+                        borderRadius: 2,
+                        border: '1px solid rgba(103, 58, 183, 0.2)',
+                        boxShadow: '0 4px 12px rgba(103, 58, 183, 0.08)',
+                        height: '100%'
+                      }}
+                    >
+                      <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1, color: '#673ab7' }}>
+                        Betweenness Centrality
+                      </Typography>
+                      
+                      <Typography variant="body2" sx={{ mb: 2, color: 'text.secondary' }}>
+                        Measures how often a node lies on the shortest path between other nodes. Identifies nodes that control information flow.
+                      </Typography>
+                      
+                      <Box sx={{ mb: 3 }}>
+                        <Grid container spacing={2}>
+                          {metrics.network_metrics.centrality_metrics.avg_betweenness > 0 && (
+                            <Grid item xs={6}>
+                              <Typography variant="body2" sx={{ color: 'text.secondary' }}>Average Betweenness:</Typography>
+                              <Typography variant="body1" sx={{ fontWeight: 'medium' }}>
+                                {metrics.network_metrics.centrality_metrics.avg_betweenness.toFixed(4)}
+                              </Typography>
+                            </Grid>
+                          )}
+                          {metrics.network_metrics.centrality_metrics.max_betweenness > 0 && (
+                            <Grid item xs={6}>
+                              <Typography variant="body2" sx={{ color: 'text.secondary' }}>Max Betweenness:</Typography>
+                              <Typography variant="body1" sx={{ fontWeight: 'medium' }}>
+                                {metrics.network_metrics.centrality_metrics.max_betweenness.toFixed(4)}
+                              </Typography>
+                            </Grid>
+                          )}
+                        </Grid>
+                      </Box>
+                      
+                      {/* Only show comparison if either value is non-zero */}
+                      {(metrics.network_metrics.centrality_metrics.avg_core_betweenness > 0 || 
+                        metrics.network_metrics.centrality_metrics.avg_periphery_betweenness > 0) && (
+                        <>
+                          <Typography variant="body2" sx={{ fontWeight: 'medium', mb: 1 }}>Core vs. Periphery Comparison:</Typography>
+                          <Grid container spacing={2}>
+                            {metrics.network_metrics.centrality_metrics.avg_core_betweenness > 0 && (
+                              <Grid item xs={6}>
+                                <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                                  <Typography variant="body2" sx={{ color: '#d32f2f', fontWeight: 'medium' }}>Core Nodes:</Typography>
+                                  <Typography variant="body1">
+                                    {metrics.network_metrics.centrality_metrics.avg_core_betweenness.toFixed(4)}
+                                  </Typography>
+                                </Box>
+                              </Grid>
+                            )}
+                            {metrics.network_metrics.centrality_metrics.avg_periphery_betweenness > 0 && (
+                              <Grid item xs={6}>
+                                <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                                  <Typography variant="body2" sx={{ color: '#0288d1', fontWeight: 'medium' }}>Periphery Nodes:</Typography>
+                                  <Typography variant="body1">
+                                    {metrics.network_metrics.centrality_metrics.avg_periphery_betweenness.toFixed(4)}
+                                  </Typography>
+                                </Box>
+                              </Grid>
+                            )}
+                          </Grid>
+                        </>
+                      )}
+                    </Paper>
+                  </Grid>
+                )}
+              </Grid>
+            </Box>
+          )}
         </Card>
       </Grow>
     </Box>

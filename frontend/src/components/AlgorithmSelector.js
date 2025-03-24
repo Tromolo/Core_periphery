@@ -15,14 +15,19 @@ import {
   Divider,
   Paper,
   Grid,
-  Chip
+  Chip,
+  FormGroup,
+  FormControlLabel,
+  Checkbox,
+  Tooltip
 } from '@mui/material';
 import { 
   PlayArrow,
   Science,
   Analytics,
   BarChart,
-  CloudUpload
+  CloudUpload,
+  Info as InfoIcon
 } from '@mui/icons-material';
 
 const AlgorithmSelector = ({ graphData, onAnalysis, onUpload }) => {
@@ -31,6 +36,8 @@ const AlgorithmSelector = ({ graphData, onAnalysis, onUpload }) => {
   const [error, setError] = useState(null);
   const [selectedAlgorithm, setSelectedAlgorithm] = useState('rombach'); // Default to Rombach
   const [success, setSuccess] = useState(false);
+  const [calculateCloseness, setCalculateCloseness] = useState(false);
+  const [calculateBetweenness, setCalculateBetweenness] = useState(false);
 
   const algorithmInfo = {
     rombach: {
@@ -104,6 +111,10 @@ const AlgorithmSelector = ({ graphData, onAnalysis, onUpload }) => {
       for (const [key, value] of Object.entries(params)) {
         formData.append(key, value);
       }
+      
+      // Add centrality calculation options
+      formData.append('calculate_closeness', calculateCloseness);
+      formData.append('calculate_betweenness', calculateBetweenness);
 
       // Send the request to the backend
       const response = await fetch('http://localhost:8080/analyze', {
@@ -262,6 +273,55 @@ const AlgorithmSelector = ({ graphData, onAnalysis, onUpload }) => {
             </Grid>
           ))}
         </Grid>
+
+        <Typography variant="h6" sx={{ mb: 2, color: 'primary.dark' }}>
+          Optional Metrics:
+        </Typography>
+        
+        <Paper sx={{ p: 2, mb: 4, borderRadius: 2 }}>
+          <Typography variant="body2" sx={{ mb: 2, color: 'text.secondary' }}>
+            You can include additional centrality metrics in the analysis. Note that these calculations may increase processing time for large networks.
+          </Typography>
+          
+          <FormGroup sx={{ display: 'flex', flexDirection: 'row' }}>
+            <FormControlLabel
+              control={
+                <Checkbox 
+                  checked={calculateCloseness}
+                  onChange={(e) => setCalculateCloseness(e.target.checked)}
+                  color="primary"
+                />
+              }
+              label={
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  <Typography variant="body2" sx={{ mr: 0.5 }}>Closeness Centrality</Typography>
+                  <Tooltip title="Measures how close a node is to all other nodes in the network. Useful for identifying nodes that can quickly reach all others.">
+                    <InfoIcon fontSize="small" color="action" />
+                  </Tooltip>
+                </Box>
+              }
+              sx={{ mr: 4 }}
+            />
+            
+            <FormControlLabel
+              control={
+                <Checkbox 
+                  checked={calculateBetweenness}
+                  onChange={(e) => setCalculateBetweenness(e.target.checked)}
+                  color="primary"
+                />
+              }
+              label={
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  <Typography variant="body2" sx={{ mr: 0.5 }}>Betweenness Centrality</Typography>
+                  <Tooltip title="Measures how often a node lies on the shortest path between other nodes. Identifies nodes that control information flow in the network.">
+                    <InfoIcon fontSize="small" color="action" />
+                  </Tooltip>
+                </Box>
+              }
+            />
+          </FormGroup>
+        </Paper>
 
         <Box sx={{ mt: 'auto', display: 'flex', justifyContent: 'center' }}>
           <Button
