@@ -9,9 +9,13 @@ import os
 import shutil
 import pandas as pd
 from .BE import BE
-from .Holme import Holme
+from .optimized_be import OptimizedBE
+from .Cucuringu import LowRankCore
 from .rombach import Rombach
+from .optimized_rombach import OptimizedRombach
 import csv
+import cpnet
+import time
 
 output_dir = "../static"
 if not os.path.exists(output_dir):
@@ -185,38 +189,134 @@ def classify_nodes_by_coreness(graph: nx.Graph, coreness: Dict, threshold: float
     
     return classifications
 
-def process_graph_with_rombach(graph: nx.Graph, num_runs: int = 10, alpha: float = 0.3, beta: float = 0.9) -> Tuple[Dict, Dict]:
-    """Process graph with Rombach algorithm."""
-    rombach = Rombach(num_runs=num_runs, alpha=alpha, beta=beta)
+def process_graph_with_rombach(graph: nx.Graph, num_runs: int = 10, alpha: float = 0.5, beta: float = 0.8) -> Tuple[Dict, Dict, Dict]:
+    """Process graph with Rombach algorithm, using optimized version for large networks."""
+    
+    if graph.number_of_nodes() >= 500:
+        print(f"Large network detected ({graph.number_of_nodes()} nodes). Using optimized Rombach implementation.")
+        # Pass the exact num_runs parameter from the user, disable auto-reduction of runs
+        rombach = OptimizedRombach(
+            num_runs=num_runs,  # Keep user-specified value
+            alpha=alpha, 
+            beta=beta, 
+            early_stop=True,    # Enable early stopping for iterations but not runs
+            respect_num_runs=True  # New parameter to ensure num_runs is respected
+        )
+    else:
+        rombach = cpnet.Rombach(num_runs=num_runs, alpha=alpha, beta=beta)
+    
     rombach.detect(graph)
     x = {node: rombach.x_[i] for i, node in enumerate(graph.nodes())}
 
-    print(f"Using coreness threshold of 0.5 for core-periphery classification")
     c = classify_nodes_by_coreness(graph, x, threshold=0.5)
     
-    return c, x
+    # Get algorithm stats if available
+    stats = getattr(rombach, 'get_stats', lambda: {})()
+    
+    return c, x, stats
 
-def process_graph_with_be(graph: nx.Graph, num_runs: int = 10) -> Tuple[Dict, Dict]:
-    """Process graph with BE algorithm."""
-    be = BE(num_runs=num_runs)
+def process_graph_with_be(graph: nx.Graph, num_runs: int = 10) -> Tuple[Dict, Dict, Dict]:
+    """Process graph with BE algorithm.
+    
+    This function uses the BE algorithm to detect the core-periphery structure of the graph.
+    For large networks, it switches to an optimized version.
+    """
+    
+    # Start timing
+    start_time = time.time()
+    
+    """if graph.number_of_nodes() >= 500:
+        print(f"Large network detected ({graph.number_of_nodes()} nodes). Using optimized BE implementation.")
+        be = OptimizedBE(
+            num_runs=num_runs,  # Keep user-specified value
+            early_stop=True, 
+            use_parallel=True,
+            respect_num_runs=True  # Ensure num_runs is respected
+        )
+    else:"""
+    be = cpnet.BE(num_runs=num_runs)
+    
+    # Store parameters for stats
+    original_num_runs = num_runs
+    
+    # Execute detection
     be.detect(graph)
     x = {node: be.x_[i] for i, node in enumerate(graph.nodes())}
     
     print(f"Using coreness threshold of 0.5 for core-periphery classification")
     c = classify_nodes_by_coreness(graph, x, threshold=0.5)
     
-    return c, x
+    # End timing
+    end_time = time.time()
+    execution_time = end_time - start_time
+    
+    # Assign execution time to the BE instance
+    be.execution_time = execution_time
+    
+    # Get algorithm stats
+    stats = getattr(be, 'get_stats', lambda: {})()
+    
+    # Add more stats information
+    stats.update({
+        "execution_time": execution_time,
+        "num_runs": original_num_runs,
+        "final_score": getattr(be, "Q_", 0),
+        "algorithm": "Borgatti-Everett",
+        "explanation": f"BE algorithm completed in {execution_time:.4f} seconds with {original_num_runs} runs."
+    })
+    
+    print(f"Core-periphery detection completed in {execution_time:.4f} seconds")
+    print(f"Best score: {getattr(be, 'Q_', 0):.4f}")
+    
+    return c, x, stats
 
-def process_graph_with_holme(graph: nx.Graph, num_iterations: int = 100, threshold: float = 0.05) -> Tuple[Dict, Dict]:
-    """Process graph with Holme algorithm."""
-    holme = Holme(num_iterations=num_iterations, threshold=threshold)
-    holme.detect(graph)
-    x = {node: holme.x_[i] for i, node in enumerate(graph.nodes())}
+def process_graph_with_Cucuringu(graph: nx.Graph, beta: float = 0.1) -> Tuple[Dict, Dict, Dict]:
+    """Process graph with Cucuringu algorithm, using optimized version for large networks."""
+    
+    # Start timing
+    start_time = time.time()
+    
+    # Use optimized version for large networks
+    """if graph.number_of_nodes() >= 500:
+        print(f"Large network detected ({graph.number_of_nodes()} nodes). Using optimized Cucuringu implementation.")
+        from .optimized_cucuringu import OptimizedLowRankCore
+        cucuringu = OptimizedLowRankCore(beta=beta, respect_params=True)
+    else:"""
+    cucuringu = cpnet.LowRankCore(beta=beta)
+    
+    # Store the parameters before detection
+    original_beta = beta
+    
+    # Detect core-periphery structure
+    cucuringu.detect(graph)
+    x = {node: cucuringu.x_[i] for i, node in enumerate(graph.nodes())}
     
     print(f"Using coreness threshold of 0.5 for core-periphery classification")
     c = classify_nodes_by_coreness(graph, x, threshold=0.5)
     
-    return c, x
+    # End timing
+    end_time = time.time()
+    execution_time = end_time - start_time
+    
+    # Assign execution time to cucuringu instance
+    cucuringu.execution_time = execution_time
+    
+    # Get algorithm stats 
+    stats = getattr(cucuringu, 'get_stats', lambda: {})()
+    
+    # Add more stats information
+    stats.update({
+        "execution_time": execution_time,
+        "beta": original_beta,
+        "final_score": getattr(cucuringu, "Q_", 0),
+        "algorithm": "Cucuringu Low Rank Core",
+        "explanation": f"Cucuringu Low Rank Core algorithm completed in {execution_time:.4f} seconds with beta={original_beta}."
+    })
+    
+    print(f"Core-periphery detection completed in {execution_time:.4f} seconds")
+    print(f"Best score: {getattr(cucuringu, 'Q_', 0):.4f}")
+    
+    return c, x, stats
 
 
 def get_core_stats(graph, classifications):
@@ -565,7 +665,7 @@ def get_algorithm_function(algorithm):
     algorithm_map = {
         "rombach": process_graph_with_rombach,
         "be": process_graph_with_be,
-        "holme": process_graph_with_holme
+        "cucuringu": process_graph_with_Cucuringu
     }
     
     if algorithm not in algorithm_map:

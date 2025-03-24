@@ -119,15 +119,15 @@ async def upload_graph(file: UploadFile = File(...)):
 async def analyze_uploaded_graph(
     file: UploadFile = File(...),
     algorithm: str = Form(...),
-    alpha: float = Form(0.3),
-    beta: float = Form(0.6),
+    # Rombach algorithm parameters
+    alpha: float = Form(0.5),
+    beta: float = Form(0.8),
     num_runs: int = Form(10),
-    num_iterations: int = Form(100),
-    threshold: float = Form(0.05),
+    # Generic parameters
+    threshold: float = Form(0.5),
     calculate_closeness: bool = Form(False),
     calculate_betweenness: bool = Form(False)
 ):
-    start_time = time.time()
     try:
         try:
             graph = await load_graph_file(file)
@@ -145,16 +145,15 @@ async def analyze_uploaded_graph(
             params = {
                 'num_runs': num_runs
             }
-        elif algorithm == 'holme':
+        elif algorithm == 'cucuringu':
             params = {
-                'num_iterations': num_iterations,
-                'threshold': threshold
+                'beta': beta
             }
         else:
             raise HTTPException(status_code=400, detail=f"Invalid algorithm: {algorithm}")
         
         algorithm_func = get_algorithm_function(algorithm)
-        classifications, coreness = algorithm_func(graph, **params)
+        classifications, coreness, algorithm_stats = algorithm_func(graph, **params)
         
         degrees = dict(graph.degree())
         
@@ -404,29 +403,10 @@ async def analyze_uploaded_graph(
         if calculate_closeness or calculate_betweenness:
             top_nodes_result["centrality_summary"] = centrality_summary
 
-        algorithm_params = {}
-        if algorithm == "rombach":
-            algorithm_params = {
-                "alpha": params.get('alpha', 0.3),
-                "beta": params.get('beta', 0.6),
-                "num_runs": params.get('num_runs', 10)
-            }
-        elif algorithm == "holme":
-            algorithm_params = {
-                "num_iterations": params.get('num_iterations', 100),
-                "threshold": params.get('threshold', 0.05)
-            }
-        elif algorithm == "be":
-            algorithm_params = {
-                "num_runs": params.get('num_runs', 10)
-            }
-        end_time = time.time()
-        execution_time = end_time - start_time
-        print(f"Execution time: {execution_time:.2f} seconds")
         return JSONResponse(content={
             "message": f"Core-periphery analysis with {algorithm} algorithm completed successfully",
             "network_metrics": network_metrics,
-            "algorithm_params": algorithm_params,
+            "algorithm_stats": algorithm_stats,
             "top_nodes": top_nodes_result,
             "node_csv_file": node_csv_file,
             "edge_csv_file": edge_csv_file,
@@ -503,7 +483,7 @@ def modularity_core_periphery_detection(G: nx.Graph):
     return core_nodes, periphery_nodes
 
 
-# Koeficient jadra a periferii podla Holme (2005)
+# Core-periphery coefficient calculation based on Cucuringu et al. (2016)
 def compute_core_periphery_coefficient(G: nx.Graph, core_nodes: list, periphery_nodes: list):
     if G.number_of_nodes() == 0:
         return 0.0

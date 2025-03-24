@@ -159,7 +159,7 @@ def calculate_all_network_metrics(graph: nx.Graph, classifications: Dict, corene
         }
         
         # Calculate coreness Q value only once and reuse it
-        if any(algorithm == alg for alg in ["rombach", "holme", "be"]):
+        if any(algorithm == alg for alg in ["rombach", "cucuringu", "be"]):
             coreness_values = [v for v in coreness.values() if isinstance(v, (int, float))]
             Q = sum(coreness_values) / max(1, len(coreness_values)) if coreness_values else 0
             
@@ -167,13 +167,13 @@ def calculate_all_network_metrics(graph: nx.Graph, classifications: Dict, corene
                 metrics["rombach_params"] = {
                     "Q": Q,
                     "alpha": algorithm_params.get('alpha', 0.0),
-                    "beta": algorithm_params.get('beta', 0.0)
+                    "beta": algorithm_params.get('beta', 0.0),
+                    "num_runs": algorithm_params.get('num_runs', 10)
                 }
-            elif algorithm == "holme":
-                metrics["holme_params"] = {
+            elif algorithm == "cucuringu":
+                metrics["cucuringu_params"] = {
                     "Q": Q,
-                    "num_iterations": algorithm_params.get('num_iterations', 100),
-                    "threshold": algorithm_params.get('threshold', 0.05)
+                    "beta": algorithm_params.get('beta', 0.0)
                 }
             elif algorithm == "be":
                 metrics["be_params"] = {

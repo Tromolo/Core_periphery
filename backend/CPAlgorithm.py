@@ -41,3 +41,13 @@ class CPAlgorithm(metaclass=ABCMeta):
         c = self.depairing(nodelabel, c)
         x = self.depairing(nodelabel, x)
         return self._score(A, c, x)
+
+    def get_stats(self):
+        """Get algorithm performance statistics.
+        This is a basic implementation; optimized algorithms provide more detailed stats.
+        """
+        return {
+            "num_iterations": len(self.qs_),
+            "final_score": self.Q_,
+            "explanation": "Standard algorithm implementation used. No detailed performance statistics available."
+        }

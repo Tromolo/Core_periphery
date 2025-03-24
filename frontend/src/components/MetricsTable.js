@@ -38,8 +38,15 @@ const MetricsTable = ({ metrics }) => {
       'alpha': 'Alpha (α)',
       'beta': 'Beta (β)',
       'num_runs': 'Number of Runs',
-      'num_iterations': 'Number of Iterations', 
-      'threshold': 'Convergence Threshold'
+      'threshold': 'Core Classification Threshold',
+      'final_score': 'Quality Score (Q)',
+      'execution_time': 'Execution Time (s)',
+      'runs_planned': 'Planned Runs',
+      'runs_completed': 'Completed Runs',
+      'early_stops': 'Early Stops',
+      'parallel': 'Parallel Execution',
+      'algorithm': 'Algorithm Type',
+      'respect_num_runs': 'Respect Num Runs'
     };
     
     return formattedNames[name] || name;
@@ -50,74 +57,172 @@ const MetricsTable = ({ metrics }) => {
     if (typeof value === 'number') {
       return Number.isInteger(value) ? value : value.toFixed(3);
     }
+    if (typeof value === 'boolean') {
+      return value ? 'Yes' : 'No';
+    }
     return value;
   };
 
   const getParameterDescription = (key) => {
     // Provide descriptions for each parameter
+    // Determine if we're using the Rombach or Cucuringu algorithm
+    const isRombach = metrics.algorithm_params?.alpha !== undefined;
+    const isCucuringu = metrics.algorithm_params?.beta !== undefined && !metrics.algorithm_params?.alpha;
+    
     const descriptions = {
-      'alpha': 'Controls the relative importance of core-to-core connections. Higher values prioritize dense connections within the core.',
-      'beta': 'Controls the relative importance of core-to-periphery connections. Higher values emphasize connections between core and periphery nodes.',
+      'alpha': 'Controls the sharpness of the core-periphery boundary in the Rombach algorithm. Higher values create a more defined boundary.',
+      'beta': isRombach 
+        ? 'Controls the fraction of peripheral nodes in the network partitioning.' 
+        : isCucuringu 
+        ? 'Controls the minimum boundary size for core detection, affecting how the algorithm partitions the network using spectral properties.' 
+        : 'Controls network partitioning parameters.',
       'num_runs': 'Number of independent algorithm runs with different initializations. Higher values improve result consistency.',
-      'num_iterations': 'Maximum number of iterations for the optimization process. More iterations may improve accuracy at the cost of computation time.',
-      'threshold': 'Convergence threshold determining when the algorithm stops. Lower values yield more precise results but require more iterations.'
+      'threshold': 'Threshold for classifying nodes as core or periphery. Nodes with coreness above this value are classified as core.',
+      'final_score': 'Quality score measuring how well the detected structure matches an ideal core-periphery pattern. Higher values indicate better match.',
+      'runs_planned': 'The total number of algorithm runs that were planned.',
+      'runs_completed': 'The actual number of algorithm runs that were completed.',
+      'early_stops': 'The number of times the algorithm stopped early due to convergence.',
+      'respect_num_runs': 'Whether the algorithm strictly respected the requested number of runs.'
     };
     
     return descriptions[key] || 'No description available';
   };
 
   const getAlgorithmName = (metrics) => {
-    if (metrics.algorithm_params?.alpha !== undefined) {
+    // Improved detection of algorithm type
+    if (metrics.algorithm_stats?.algorithm === 'rombach') {
       return "Rombach Algorithm";
-    } else if (metrics.algorithm_params?.num_iterations !== undefined) {
-      return "Holme Algorithm";
-    } else if (metrics.algorithm_params?.num_runs !== undefined) {
-      // Only BE has num_runs but no alpha or num_iterations
+    } else if (metrics.algorithm_stats?.algorithm === 'be') {
+      return "Borgatti & Everett (BE) Algorithm";
+    } else if (metrics.algorithm_stats?.algorithm === 'cucuringu') {
+      return "Cucuringu Algorithm (LowRankCore)";
+    } else if (metrics.algorithm_params?.alpha !== undefined) {
+      return "Rombach Algorithm";
+    } else if (metrics.algorithm_params?.beta !== undefined && !metrics.algorithm_params?.alpha) {
+      return "Cucuringu Algorithm (LowRankCore)";
+    } else if (metrics.algorithm_params?.num_runs !== undefined && !metrics.algorithm_params?.alpha) {
+      // Only BE has num_runs but no alpha
       return "Borgatti & Everett (BE) Algorithm";
     }
-    return "Unknown Algorithm";
+    
+    // Additional fallback detection - if we have network_metrics, check structure quality
+    if (metrics.network_metrics?.core_stats) {
+      // Based on the presence of core stats, we can assume some algorithm was run
+      // Default to Rombach as it's the most commonly used
+      return "Core-Periphery Algorithm";
+    }
+    
+    return "Core-Periphery Analysis";
   };
 
   const getAlgorithmDescription = (metrics) => {
+    // First check algorithm_stats if available
+    if (metrics.algorithm_stats?.algorithm === 'rombach') {
+      return "A continuous core-periphery detection method that optimizes a quality function based on the density of connections. It allows for a more nuanced assignment of nodes to the core or periphery.";
+    } else if (metrics.algorithm_stats?.algorithm === 'be') {
+      return "A discrete core-periphery detection method based on correlation with an ideal core-periphery structure. This algorithm identifies a binary core/periphery structure.";
+    } else if (metrics.algorithm_stats?.algorithm === 'cucuringu') {
+      return "A spectral method for core-periphery detection using low-rank matrix approximation and eigendecomposition. This algorithm finds core-periphery structure by analyzing the network's spectral properties.";
+    }
+    
+    // Fallback to checking params if algorithm_stats doesn't have the info
     if (metrics.algorithm_params?.alpha !== undefined) {
       return "A continuous core-periphery detection method that optimizes a quality function based on the density of connections. It allows for a more nuanced assignment of nodes to the core or periphery.";
-    } else if (metrics.algorithm_params?.num_iterations !== undefined) {
-      return "An iterative method that optimizes a core-coefficient quality function through node swapping. This algorithm focuses on finding a structure that maximizes connections within the core and between core and periphery.";
-    } else if (metrics.algorithm_params?.num_runs !== undefined) {
-      // Only BE has num_runs but no alpha or num_iterations
+    } else if (metrics.algorithm_params?.beta !== undefined && !metrics.algorithm_params?.alpha) {
+      return "A spectral method for core-periphery detection using low-rank matrix approximation and eigendecomposition. This algorithm finds core-periphery structure by analyzing the network's spectral properties.";
+    } else if (metrics.algorithm_params?.num_runs !== undefined && !metrics.algorithm_params?.alpha) {
+      // Only BE has num_runs but no alpha
       return "A discrete core-periphery detection method based on correlation with an ideal core-periphery structure. This algorithm identifies a binary core/periphery structure.";
     }
-    return "No description available for this algorithm.";
+    
+    // Final fallback - generic description
+    return "This algorithm detects core-periphery structure by dividing the network into densely connected core nodes and more sparsely connected peripheral nodes.";
   };
 
   const getAlgorithmReference = (metrics) => {
+    // First check algorithm_stats if available
+    if (metrics.algorithm_stats?.algorithm === 'rombach') {
+      return "Reference: Rombach et al. (2017). \"Core-Periphery Structure in Networks.\"";
+    } else if (metrics.algorithm_stats?.algorithm === 'be') {
+      return "Reference: Borgatti & Everett (2000). \"Models of Core/Periphery Structures.\"";
+    } else if (metrics.algorithm_stats?.algorithm === 'cucuringu') {
+      return "Reference: Cucuringu et al. (2016). \"Detection of core-periphery structure in networks using spectral methods and geodesic paths.\"";
+    }
+    
+    // Fallback to checking params
     if (metrics.algorithm_params?.alpha !== undefined) {
       return "Reference: Rombach et al. (2017). \"Core-Periphery Structure in Networks.\"";
-    } else if (metrics.algorithm_params?.num_iterations !== undefined) {
-      return "Reference: Holme (2005). \"Core-periphery organization of complex networks.\"";
-    } else if (metrics.algorithm_params?.num_runs !== undefined) {
-      // Only BE has num_runs but no alpha or num_iterations
+    } else if (metrics.algorithm_params?.beta !== undefined && !metrics.algorithm_params?.alpha) {
+      return "Reference: Cucuringu et al. (2016). \"Detection of core-periphery structure in networks using spectral methods and geodesic paths.\"";
+    } else if (metrics.algorithm_params?.num_runs !== undefined && !metrics.algorithm_params?.alpha) {
+      // Only BE has num_runs but no alpha
       return "Reference: Borgatti & Everett (2000). \"Models of Core/Periphery Structures.\"";
     }
-    return "";
+    
+    // Generic reference list if we can't determine the specific algorithm
+    return "References: Borgatti & Everett (2000), Rombach et al. (2017), Cucuringu et al. (2016)";
   };
 
   const getAlgorithmParams = () => {
-    if (metrics.algorithm_params?.alpha !== undefined) {
-      return metrics.algorithm_params;
-    } else if (metrics.algorithm_params?.num_iterations !== undefined) {
-      return metrics.algorithm_params;
-    } else if (metrics.algorithm_params?.num_runs !== undefined) {
-      // Only BE has num_runs but no alpha or num_iterations
-      return metrics.algorithm_params;
+    const algorithm_stats = metrics.algorithm_stats || {};
+    const algorithm_params = metrics.algorithm_params || {};
+    
+    // Combine algorithm stats with parameters
+    const combinedParams = {
+      ...algorithm_params,
+      ...(algorithm_stats.final_score !== undefined ? { final_score: algorithm_stats.final_score } : {}),
+      ...(algorithm_stats.execution_time !== undefined ? { execution_time: algorithm_stats.execution_time } : {}),
+      ...(algorithm_stats.runs_planned !== undefined ? { runs_planned: algorithm_stats.runs_planned } : {}),
+      ...(algorithm_stats.runs_completed !== undefined ? { runs_completed: algorithm_stats.runs_completed } : {}),
+      ...(algorithm_stats.early_stops !== undefined ? { early_stops: algorithm_stats.early_stops } : {})
+    };
+    
+    // If we don't have params, try to extract what we can from network_metrics
+    if (Object.keys(combinedParams).length === 0 && metrics.network_metrics?.core_stats) {
+      const coreStats = metrics.network_metrics.core_stats;
+      // Add a fallback quality score if available
+      if (coreStats.ideal_pattern_match !== undefined) {
+        combinedParams.final_score = coreStats.ideal_pattern_match / 100;
+      }
     }
-    return {};
+    
+    return combinedParams;
   };
 
   const getDisplayParameters = (params) => {
-    const allowedParams = ['alpha', 'beta', 'num_runs', 'num_iterations', 'threshold'];
-    return Object.entries(params)
-      .filter(([key]) => allowedParams.includes(key))
+    // Prioritize showing these parameters in this order
+    const priorityParams = [
+      'final_score', 
+      'alpha', 
+      'beta', 
+      'num_runs',
+      'threshold',
+      'execution_time',
+      'runs_planned',
+      'runs_completed',
+      'early_stops'
+    ];
+    
+    // Filter out parameters with undefined values
+    const filteredParams = Object.entries(params)
+      .filter(([_, value]) => value !== undefined)
+      .reduce((obj, [key, value]) => {
+        obj[key] = value;
+        return obj;
+      }, {});
+    
+    // Sort parameters by priority
+    return Object.entries(filteredParams)
+      .sort((a, b) => {
+        const indexA = priorityParams.indexOf(a[0]);
+        const indexB = priorityParams.indexOf(b[0]);
+        
+        if (indexA === -1 && indexB === -1) return 0;
+        if (indexA === -1) return 1;
+        if (indexB === -1) return -1;
+        
+        return indexA - indexB;
+      })
       .reduce((obj, [key, value]) => {
         obj[key] = value;
         return obj;
@@ -155,6 +260,7 @@ const MetricsTable = ({ metrics }) => {
   const params = getAlgorithmParams();
   const displayParams = getDisplayParameters(params);
   const algorithmName = getAlgorithmName(metrics);
+  const qualityScore = metrics.algorithm_stats?.final_score;
 
   // Determine if centrality metrics are available for the node tables
   const hasCloseness = metrics.top_nodes.top_core_nodes.length > 0 && 
@@ -178,6 +284,37 @@ const MetricsTable = ({ metrics }) => {
   const hasMeaningfulBetweenness = hasBetweennessMetrics;
   const hasAnyCentralityMetrics = hasMeaningfulCloseness || hasMeaningfulBetweenness;
   
+  // Add a function to create a color-coded quality score display
+  const renderQualityScore = (score) => {
+    const interpretation = getQualityInterpretation(score);
+    const color = getQualityColor(score);
+    
+    return (
+      <Box sx={{ display: 'flex', alignItems: 'center', mt: 2 }}>
+        <Typography variant="subtitle1" sx={{ mr: 2 }}>
+          Quality Score (Q): 
+        </Typography>
+        <Box 
+          sx={{ 
+            bgcolor: `${color}20`, 
+            color: color, 
+            px: 2, 
+            py: 1, 
+            borderRadius: 2,
+            fontWeight: 'bold',
+            display: 'flex',
+            alignItems: 'center'
+          }}
+        >
+          {score.toFixed(3)} 
+          <Typography variant="body2" sx={{ ml: 1, fontStyle: 'italic' }}>
+            ({interpretation})
+          </Typography>
+        </Box>
+      </Box>
+    );
+  };
+
   return (
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
@@ -220,6 +357,9 @@ const MetricsTable = ({ metrics }) => {
             <Typography variant="caption" color="text.secondary">
               {getAlgorithmReference(metrics)}
             </Typography>
+            
+            {/* Add Quality Score display if available */}
+            {qualityScore !== undefined && renderQualityScore(qualityScore)}
           </Paper>
 
           <Typography variant="h6" sx={{ mb: 2 }}>
@@ -344,13 +484,110 @@ const MetricsTable = ({ metrics }) => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {params && Object.entries(params).map(([key, value]) => (
-                  <TableRow key={key}>
-                    <TableCell>{formatParameterName(key)}</TableCell>
-                    <TableCell>{formatParameterValue(value)}</TableCell>
-                    <TableCell>{getParameterDescription(key)}</TableCell>
+                {/* Algorithm Configuration Parameters */}
+                {(displayParams.alpha !== undefined || 
+                  displayParams.beta !== undefined || 
+                  displayParams.num_runs !== undefined || 
+                  displayParams.threshold !== undefined) && (
+                  <TableRow>
+                    <TableCell colSpan={3} sx={{ bgcolor: 'rgba(25, 118, 210, 0.05)', fontWeight: 'bold' }}>
+                      Algorithm Configuration
+                    </TableCell>
                   </TableRow>
-                ))}
+                )}
+                {displayParams.alpha !== undefined && (
+                  <TableRow>
+                    <TableCell>{formatParameterName('alpha')}</TableCell>
+                    <TableCell>{formatParameterValue(displayParams.alpha)}</TableCell>
+                    <TableCell>{getParameterDescription('alpha')}</TableCell>
+                  </TableRow>
+                )}
+                {displayParams.beta !== undefined && (
+                  <TableRow>
+                    <TableCell>{formatParameterName('beta')}</TableCell>
+                    <TableCell>{formatParameterValue(displayParams.beta)}</TableCell>
+                    <TableCell>{getParameterDescription('beta')}</TableCell>
+                  </TableRow>
+                )}
+                {displayParams.num_runs !== undefined && (
+                  <TableRow>
+                    <TableCell>{formatParameterName('num_runs')}</TableCell>
+                    <TableCell>{formatParameterValue(displayParams.num_runs)}</TableCell>
+                    <TableCell>{getParameterDescription('num_runs')}</TableCell>
+                  </TableRow>
+                )}
+                {displayParams.threshold !== undefined && (
+                  <TableRow>
+                    <TableCell>{formatParameterName('threshold')}</TableCell>
+                    <TableCell>{formatParameterValue(displayParams.threshold)}</TableCell>
+                    <TableCell>{getParameterDescription('threshold')}</TableCell>
+                  </TableRow>
+                )}
+                
+                {/* Performance Metrics */}
+                {(displayParams.execution_time !== undefined || 
+                  displayParams.runs_planned !== undefined || 
+                  displayParams.runs_completed !== undefined || 
+                  displayParams.early_stops !== undefined) && (
+                  <TableRow>
+                    <TableCell colSpan={3} sx={{ bgcolor: 'rgba(76, 175, 80, 0.05)', fontWeight: 'bold' }}>
+                      Performance Metrics
+                    </TableCell>
+                  </TableRow>
+                )}
+                {displayParams.execution_time !== undefined && (
+                  <TableRow>
+                    <TableCell>{formatParameterName('execution_time')}</TableCell>
+                    <TableCell>{formatParameterValue(displayParams.execution_time)}</TableCell>
+                    <TableCell>{getParameterDescription('execution_time')}</TableCell>
+                  </TableRow>
+                )}
+                {displayParams.runs_planned !== undefined && (
+                  <TableRow>
+                    <TableCell>{formatParameterName('runs_planned')}</TableCell>
+                    <TableCell>{formatParameterValue(displayParams.runs_planned)}</TableCell>
+                    <TableCell>{getParameterDescription('runs_planned')}</TableCell>
+                  </TableRow>
+                )}
+                {displayParams.runs_completed !== undefined && (
+                  <TableRow>
+                    <TableCell>{formatParameterName('runs_completed')}</TableCell>
+                    <TableCell>{formatParameterValue(displayParams.runs_completed)}</TableCell>
+                    <TableCell>{getParameterDescription('runs_completed')}</TableCell>
+                  </TableRow>
+                )}
+                {displayParams.early_stops !== undefined && (
+                  <TableRow>
+                    <TableCell>{formatParameterName('early_stops')}</TableCell>
+                    <TableCell>{formatParameterValue(displayParams.early_stops)}</TableCell>
+                    <TableCell>{getParameterDescription('early_stops')}</TableCell>
+                  </TableRow>
+                )}
+                
+                {/* Other Parameters */}
+                {Object.entries(displayParams)
+                  .filter(([key]) => !['alpha', 'beta', 'num_runs', 'threshold', 
+                                      'execution_time', 'runs_planned', 'runs_completed', 
+                                      'early_stops', 'final_score'].includes(key))
+                  .length > 0 && (
+                  <TableRow>
+                    <TableCell colSpan={3} sx={{ bgcolor: 'rgba(211, 47, 47, 0.05)', fontWeight: 'bold' }}>
+                      Additional Settings
+                    </TableCell>
+                  </TableRow>
+                )}
+                {Object.entries(displayParams)
+                  .filter(([key]) => !['alpha', 'beta', 'num_runs', 'threshold', 
+                                      'execution_time', 'runs_planned', 'runs_completed', 
+                                      'early_stops', 'final_score'].includes(key))
+                  .map(([key, value]) => (
+                    <TableRow key={key}>
+                      <TableCell>{formatParameterName(key)}</TableCell>
+                      <TableCell>{formatParameterValue(value)}</TableCell>
+                      <TableCell>{getParameterDescription(key)}</TableCell>
+                    </TableRow>
+                  ))
+                }
               </TableBody>
             </Table>
           </TableContainer>

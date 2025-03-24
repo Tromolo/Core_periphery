@@ -7,15 +7,47 @@ from .CPAlgorithm import CPAlgorithm
 
 
 class BE(CPAlgorithm):
-    """Borgatti Everett algorithm for core-periphery detection."""
+    """Borgatti Everett algorithm.
+
+    Algorithm for finding single core-periphery pair in networks.
+
+    S. P. Borgatti and M. G. Everett. Models of core/periphery structures. Social Networks, 21, 375–395, 2000
+
+    .. highlight:: python
+    .. code-block:: python
+
+        >>> import cpnet
+        >>> be = cpnet.BE()
+        >>> be.detect(G)
+        >>> pair_id = be.get_pair_id()
+        >>> coreness = be.get_coreness()
+
+    .. note::
+
+        - [ ] weighted
+        - [ ] directed
+        - [ ] multiple groups of core-periphery pairs
+        - [ ] continuous core-periphery structure
+    """
 
     def __init__(self, num_runs=10):
-        """Initialize algorithm."""
+        """Initialize algorithm.
+
+        :param num_runs: number of runs, defaults to 10
+        :type num_runs: int, optional
+        """
         self.num_runs = num_runs
         self.n_jobs = 1
 
     def detect(self, G):
-        """Detect core-periphery structure."""
+        """Detect core-periphery structure.
+
+        :param G: Graph
+        :type G: networkx.Graph or scipy sparse matrix
+        :return: None
+        :rtype: None
+        """
+
         A, nodelabel = utils.to_adjacency_matrix(G)
 
         def _detect(A_indptr, A_indices, A_data, num_nodes):
@@ -25,60 +57,17 @@ class BE(CPAlgorithm):
             Q, qs = _score_(A_indptr, A_indices, A_data, cids, x, num_nodes)
             return {"cids": cids, "x": x, "q": Q}
 
-        # Run detection multiple times and take best result
         res = Parallel(n_jobs=self.n_jobs)(
             delayed(_detect)(A.indptr, A.indices, A.data, A.shape[0])
             for i in range(self.num_runs)
         )
         res = max(res, key=lambda x: x["q"])
-        
-        # Store results
+        cids, x, Q = res["cids"], res["x"], res["q"]
         self.nodelabel = nodelabel
-        self.c_ = res["x"].astype(int) 
-        self.x_ = self._calculate_coreness(A, self.c_) 
-        self.Q_ = res["q"]
-
-    def _calculate_coreness(self, A, c):
-        """Calculate continuous coreness values."""
-        N = A.shape[0]
-        coreness = np.zeros(N)
-        
-        degrees = np.array(A.sum(axis=1)).flatten()
-        max_degree = np.max(degrees)
-        
-        try:
-            import networkx as nx
-            G = nx.from_scipy_sparse_matrix(A)
-            betweenness = nx.betweenness_centrality(G)
-            max_betweenness = max(betweenness.values())
-        except:
-            betweenness = {i: degrees[i]/sum(degrees) for i in range(N)}
-            max_betweenness = max(betweenness.values())
-        
-        for i in range(N):
-            neighbors = A[i].nonzero()[1]
-            if len(neighbors) > 0:
-
-                neighbor_core = np.sum(c[neighbors])
-                degree_ratio = degrees[i] / max_degree
-                between_ratio = betweenness[i] / max_betweenness
-                
-                coreness[i] = (
-                    0.3 * (neighbor_core / len(neighbors)) + 
-                    0.35 * degree_ratio + 
-                    0.35 * between_ratio
-                )
-        
-        for i in range(N):
-            if (degrees[i] > np.mean(degrees) + np.std(degrees) and 
-                betweenness[i] > np.mean(list(betweenness.values())) + np.std(list(betweenness.values()))):
-                c[i] = 1
-                coreness[i] = max(coreness[i], 0.8) 
-
-        if np.max(coreness) > 0:
-            coreness = coreness / np.max(coreness)
-
-        return {i: float(v) for i, v in enumerate(coreness)}
+        self.c_ = cids.astype(int)
+        self.x_ = x.astype(int)
+        self.Q_ = Q
+        self.qs_ = [Q]
 
     def _score(self, A, c, x):
         """Calculate the strength of core-periphery pairs.
@@ -95,6 +84,13 @@ class BE(CPAlgorithm):
         num_nodes = A.shape[0]
         Q, qs = _score_(A.indptr, A.indices, A.data, c, x, num_nodes)
         return qs
+
+    def get_stats(self):
+        """Get algorithm performance statistics"""
+        return {
+            "num_runs": self.num_runs,
+            "final_score": getattr(self, "Q_", 0),
+        }
 
 
 @numba.jit(nopython=True, cache=True)

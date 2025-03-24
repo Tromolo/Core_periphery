@@ -83,6 +83,7 @@ class Rombach(CPAlgorithm):
         self.Q_ = qbest
         self.qs_ = [qbest]
 
+    
     def _label_switching(self, A, alpha, beta):
 
         ndord = _rombach_label_switching_(
@@ -124,6 +125,15 @@ class Rombach(CPAlgorithm):
         :rtype: float
         """
         return [x.T @ A @ x]
+
+    def get_stats(self):
+        """Get algorithm performance statistics"""
+        return {
+            "num_runs": self.num_runs,
+            "alpha": self.alpha,
+            "beta": self.beta,
+            "final_score": getattr(self, "Q_", 0),
+        }
 
 
 class SimAlg(Annealer):
