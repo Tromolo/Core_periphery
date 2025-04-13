@@ -16,7 +16,6 @@ import AccountTreeIcon from '@mui/icons-material/AccountTree';
 const NodeDetailsPanel = ({ selectedNode, graphRef }) => {
   const theme = useTheme();
   
-  // Calculate connected nodes
   const connectedNodes = useMemo(() => {
     if (!selectedNode || !graphRef) return [];
     
@@ -73,7 +72,6 @@ const NodeDetailsPanel = ({ selectedNode, graphRef }) => {
           </Typography>
         </Box>
         
-        {/* Display all attributes */}
         {Object.entries(selectedNode).filter(([key]) => 
           !['id', 'label', 'x', 'y', 'size', 'color', 'type', 'nodeType', 'isCore'].includes(key)
         ).map(([key, value]) => (
@@ -88,7 +86,6 @@ const NodeDetailsPanel = ({ selectedNode, graphRef }) => {
         ))}
       </Box>
       
-      {/* Connected nodes section */}
       {connectedNodes.length > 0 && (
         <>
           <Divider sx={{ my: 1.5 }} />

@@ -16,6 +16,11 @@ from .optimized_rombach import OptimizedRombach
 import csv
 import cpnet
 import time
+import random
+import matplotlib.pyplot as plt
+import io
+import base64
+from scipy.stats import norm
 
 output_dir = "../static"
 if not os.path.exists(output_dir):
@@ -36,18 +41,11 @@ def infer_edge_list_columns(df: pd.DataFrame):
 
     return df
 
-async def load_graph_file(file: UploadFile) -> nx.Graph:
-    if not file.filename:
-        raise ValueError("No file provided.")
-
-    filename = file.filename
+def load_graph_from_path(path: str, filename: str = None) -> nx.Graph:
+    """Loads a graph from a given file path, attempting various formats."""
+    if filename is None:
+        filename = os.path.basename(path)
     ext = filename.split(".")[-1].lower()
-
-    os.makedirs("../tmp", exist_ok=True)
-    path = os.path.join("../tmp", f"{uuid.uuid4()}.{ext}")
-
-    with open(path, "wb") as f:
-        shutil.copyfileobj(file.file, f)
 
     try:
         if ext == "gml":
@@ -67,7 +65,7 @@ async def load_graph_file(file: UploadFile) -> nx.Graph:
                             G = nx.read_gml(path, label='name')
                         except Exception as gml_error4:
                             print(f"GML loading with label=name failed: {str(gml_error4)}")
-                            
+
                             if 'karate' in filename.lower():
                                 try:
                                     print("Attempting to load karate club network directly...")
@@ -78,106 +76,154 @@ async def load_graph_file(file: UploadFile) -> nx.Graph:
                                     raise ValueError(f"Could not load karate club network: {str(gml_error)}")
                             else:
                                 raise ValueError(f"Failed to load GML file: {str(gml_error)}")
-                
-                print("Successfully loaded GML file using alternative method")
-            except Exception as gml_error:
-                print(f"Standard GML loading failed: {str(gml_error)}")
-                try:
-                    G = nx.read_gml(path, label=None)
-                except Exception as gml_error2:
-                    try:
-                        G = nx.read_gml(path, label='id')
-                    except Exception:
-                        try:
-                            G = nx.read_gml(path, label='name')
-                        except Exception as final_error:
-                            raise ValueError(f"Failed to load GML file with multiple methods: {str(final_error)}")
-                            
-                print("Successfully loaded GML file using alternative method")
+
+                print(f"Successfully loaded GML file using alternative method: {path}")
+
         elif ext == "graphml":
             G = nx.read_graphml(path)
         elif ext == "gexf":
             G = nx.read_gexf(path)
         elif ext == "edgelist":
-            G = nx.read_edgelist(path, create_using=nx.MultiGraph())
+            try:
+                G = nx.read_edgelist(path, create_using=nx.Graph)
+            except Exception as edgelist_error:
+                 print(f"Reading as simple edgelist failed: {edgelist_error}. Trying weighted.")
+                 try:
+                     G = nx.read_weighted_edgelist(path, create_using=nx.Graph)
+                 except Exception as weighted_error:
+                     print(f"Reading as weighted edgelist failed: {weighted_error}.")
+                     raise ValueError(f"Failed to load edgelist file: {filename}") from weighted_error
         elif ext == "pajek" or ext == "net":
             G = nx.read_pajek(path)
         elif ext in ["csv", "txt", "tsv", "dat"]:
             with open(path, "r", encoding='utf-8', errors='ignore') as f:
                 sample = f.read(2048)
-            
-            possible_separators = [',', ';', '\t', ' ', '|', ':', '.']
-            
-            separator_counts = {sep: sample.count(sep) for sep in possible_separators}
-            
-            best_separator = max(separator_counts.items(), key=lambda x: x[1])
-            sep = best_separator[0] if best_separator[1] > 0 else ','
-            
-            print(f"Detected separator: '{sep}' with {best_separator[1]} occurrences")
-            
+                f.seek(0)
+
+            possible_separators = [',', ';', '\t', ' ', '|']
+            separator_counts = {sep: sample.count(sep) for sep in possible_separators if sample.count(sep) > 0}
+
+            if not separator_counts:
+                 if sample.count('  ') > sample.count(' '):
+                     sep = r'\s+'
+                     print("Detected potential multi-whitespace separator")
+                 elif sample.count(' ') > 0:
+                      sep = ' '
+                      print("Detected single space separator")
+                 else:
+                      sep = ','
+                      print("Warning: No common separator detected, falling back to comma.")
+
+            else:
+                best_separator = max(separator_counts.items(), key=lambda item: item[1])
+                sep = best_separator[0]
+                print(f"Detected separator: '{sep}' with {best_separator[1]} occurrences in sample.")
+
+
             try:
-                df = pd.read_csv(path, sep=sep, encoding='utf-8', engine='python')
-                
-                header_is_numeric = all(isinstance(col, (int, float)) or 
-                                    (isinstance(col, str) and col.replace('.', '', 1).isdigit()) 
-                                    for col in df.columns)
-                
-                if header_is_numeric:
-                    df = pd.read_csv(path, sep=sep, header=None, encoding='utf-8', engine='python')
+                df = pd.read_csv(path, sep=sep, encoding='utf-8', engine='python', low_memory=False)
+
+                header_is_likely_data = all(isinstance(col, (int, float)) or (isinstance(col, str) and col.replace('.', '', 1).isdigit()) for col in df.columns)
+
+                if header_is_likely_data:
+                    print("Header seems to be data, re-reading with header=None.")
+                    df = pd.read_csv(path, sep=sep, header=None, encoding='utf-8', engine='python', low_memory=False)
                     df = infer_edge_list_columns(df)
+                else:
+                     if "source" not in df.columns or "target" not in df.columns:
+                         print("Inferring source/target columns from existing header.")
+                         df = infer_edge_list_columns(df.copy())
+
+
             except Exception as e:
+                print(f"Error reading CSV with detected separator '{sep}': {e}. Trying without header.")
                 try:
-                    df = pd.read_csv(path, sep=sep, header=None, encoding='utf-8', engine='python')
+                    df = pd.read_csv(path, sep=sep, header=None, encoding='utf-8', engine='python', low_memory=False)
                     df = infer_edge_list_columns(df)
                 except Exception as e2:
-                    df = pd.read_csv(
-                        path, 
-                        sep=None,
-                        header=None, 
-                        engine='python',
-                        encoding='utf-8', 
-                        error_bad_lines=False,
-                        warn_bad_lines=True
-                    )
-                    
-                    if df.shape[1] < 2:
-                        raise ValueError(f"Invalid edge list format: could not detect at least 2 columns")
-                    
-                    df = infer_edge_list_columns(df)
+                    print(f"Error reading CSV without header: {e2}. Trying default pandas separator detection.")
+                    try:
+                        df = pd.read_csv(
+                            path,
+                            sep=None,
+                            header=None,
+                            engine='python',
+                            encoding='utf-8',
+                            skipinitialspace=True,
+                            on_bad_lines='warn'
+                        )
+                        if df.shape[1] < 2:
+                             raise ValueError("Auto-detected less than 2 columns.")
+                        df = infer_edge_list_columns(df)
+                    except Exception as e3:
+                         raise ValueError(f"Failed to load CSV/text file {filename} with multiple methods: {e3}") from e3
 
             if df.shape[1] < 2:
-                raise ValueError(f"Invalid edge list format: {df.shape[1]} columns found.")
+                raise ValueError(f"Invalid edge list format in {filename}: {df.shape[1]} columns found after processing.")
 
             if "source" not in df.columns or "target" not in df.columns:
-                df = infer_edge_list_columns(df)
+                 print("Warning: 'source' or 'target' columns not found after processing. Attempting inference again.")
+                 try:
+                     df = infer_edge_list_columns(df.copy())
+                 except ValueError as infer_error:
+                      raise ValueError(f"Could not determine source/target columns in {filename}") from infer_error
+
 
             df.columns = [col.strip() if isinstance(col, str) else col for col in df.columns]
 
-            df = df.dropna(subset=df.columns[:2])
-            
-            for col in df.columns[:2]:
-                if df[col].dtype in ['int64', 'float64']:
-                    df[col] = df[col].astype(str)
-            
+            df = df.dropna(subset=["source", "target"])
+
+            df["source"] = df["source"].astype(str)
+            df["target"] = df["target"].astype(str)
+
             edge_attrs = list(df.columns.difference(["source", "target"]))
-            
+
             G = nx.from_pandas_edgelist(
-                df, 
-                source="source", 
-                target="target", 
+                df,
+                source="source",
+                target="target",
                 edge_attr=edge_attrs if edge_attrs else None,
                 create_using=nx.Graph()
             )
         else:
             raise ValueError(f"Unsupported file type: {ext}")
 
+        print(f"Successfully loaded graph from {path}. Nodes: {G.number_of_nodes()}, Edges: {G.number_of_edges()}")
         return G
+
     except Exception as e:
-        print(f"Error loading file: {str(e)}")
-        raise ValueError(f"Error processing file: {str(e)}")
+        print(f"Error loading graph from path '{path}': {str(e)}")
+        raise ValueError(f"Error processing file {filename}: {str(e)}") from e
+
+async def load_graph_file(file: UploadFile) -> nx.Graph:
+    if not file.filename:
+        raise ValueError("No file provided.")
+
+    filename = file.filename
+    ext = filename.split(".")[-1].lower()
+
+    temp_dir = "../tmp"
+    os.makedirs(temp_dir, exist_ok=True)
+    temp_path = os.path.join(temp_dir, f"{uuid.uuid4()}.{ext}")
+
+    try:
+        with open(temp_path, "wb") as f:
+            shutil.copyfileobj(file.file, f)
+
+        G = load_graph_from_path(temp_path, filename)
+        return G
+
+    except Exception as e:
+        print(f"Error processing uploaded file '{filename}': {str(e)}")
+        raise ValueError(f"Error processing file '{filename}': {str(e)}") from e
     finally:
-        if os.path.exists(path):
-            os.remove(path)
+        if os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+                print(f"Removed temporary file: {temp_path}")
+            except OSError as oe:
+                 print(f"Error removing temporary file {temp_path}: {oe}")
+        await file.close()
 
 def classify_nodes_by_coreness(graph: nx.Graph, coreness: Dict, threshold: float = 0.5) -> Dict:
 
@@ -190,131 +236,69 @@ def classify_nodes_by_coreness(graph: nx.Graph, coreness: Dict, threshold: float
     return classifications
 
 def process_graph_with_rombach(graph: nx.Graph, num_runs: int = 10, alpha: float = 0.5, beta: float = 0.8) -> Tuple[Dict, Dict, Dict]:
-    """Process graph with Rombach algorithm, using optimized version for large networks."""
-    
-    if graph.number_of_nodes() >= 500:
-        print(f"Large network detected ({graph.number_of_nodes()} nodes). Using optimized Rombach implementation.")
-        # Pass the exact num_runs parameter from the user, disable auto-reduction of runs
-        rombach = OptimizedRombach(
-            num_runs=num_runs,  # Keep user-specified value
-            alpha=alpha, 
-            beta=beta, 
-            early_stop=True,    # Enable early stopping for iterations but not runs
-            respect_num_runs=True  # New parameter to ensure num_runs is respected
-        )
-    else:
-        rombach = cpnet.Rombach(num_runs=num_runs, alpha=alpha, beta=beta)
+
+    rombach = cpnet.Rombach(num_runs=num_runs, alpha=alpha, beta=beta)
     
     rombach.detect(graph)
     x = {node: rombach.x_[i] for i, node in enumerate(graph.nodes())}
 
     c = classify_nodes_by_coreness(graph, x, threshold=0.5)
     
-    # Get algorithm stats if available
     stats = getattr(rombach, 'get_stats', lambda: {})()
+
+    stats.update({
+        "final_score": getattr(rombach, "Q_", 0),
+        "algorithm": "rombach", 
+    })
     
     return c, x, stats
 
 def process_graph_with_be(graph: nx.Graph, num_runs: int = 10) -> Tuple[Dict, Dict, Dict]:
-    """Process graph with BE algorithm.
-    
-    This function uses the BE algorithm to detect the core-periphery structure of the graph.
-    For large networks, it switches to an optimized version.
-    """
-    
-    # Start timing
-    start_time = time.time()
-    
-    """if graph.number_of_nodes() >= 500:
-        print(f"Large network detected ({graph.number_of_nodes()} nodes). Using optimized BE implementation.")
-        be = OptimizedBE(
-            num_runs=num_runs,  # Keep user-specified value
-            early_stop=True, 
-            use_parallel=True,
-            respect_num_runs=True  # Ensure num_runs is respected
-        )
-    else:"""
     be = cpnet.BE(num_runs=num_runs)
+    try:
+        if graph.number_of_nodes() >= 1000:
+            print(f"Large network with {graph.number_of_nodes()} nodes. BE algorithm may take some time.")
+        
+        be.detect(graph)
+        
+        x = {node: be.x_[i] for i, node in enumerate(graph.nodes())}
+        c = {node: 'C' if x[node] == 1 else 'P' for node in graph.nodes()}
+        
+        core_count = sum(1 for v in c.values() if v == 'C')
+        periphery_count = sum(1 for v in c.values() if v == 'P')
+        print(f"BE classification complete: {core_count} core nodes, {periphery_count} periphery nodes")
+        
+    except Exception as e:
+        print(f"Error in BE algorithm: {str(e)}")
+        x = {node: 0 for node in graph.nodes()}
+        c = {node: 'P' for node in graph.nodes()}
     
-    # Store parameters for stats
-    original_num_runs = num_runs
-    
-    # Execute detection
-    be.detect(graph)
-    x = {node: be.x_[i] for i, node in enumerate(graph.nodes())}
-    
-    print(f"Using coreness threshold of 0.5 for core-periphery classification")
-    c = classify_nodes_by_coreness(graph, x, threshold=0.5)
-    
-    # End timing
-    end_time = time.time()
-    execution_time = end_time - start_time
-    
-    # Assign execution time to the BE instance
-    be.execution_time = execution_time
-    
-    # Get algorithm stats
-    stats = getattr(be, 'get_stats', lambda: {})()
-    
-    # Add more stats information
-    stats.update({
-        "execution_time": execution_time,
-        "num_runs": original_num_runs,
-        "final_score": getattr(be, "Q_", 0),
+    stats = {
         "algorithm": "Borgatti-Everett",
-        "explanation": f"BE algorithm completed in {execution_time:.4f} seconds with {original_num_runs} runs."
-    })
-    
-    print(f"Core-periphery detection completed in {execution_time:.4f} seconds")
-    print(f"Best score: {getattr(be, 'Q_', 0):.4f}")
+        "num_runs": num_runs,
+        "final_score": getattr(be, "Q_", 0),
+    }
     
     return c, x, stats
 
 def process_graph_with_Cucuringu(graph: nx.Graph, beta: float = 0.1) -> Tuple[Dict, Dict, Dict]:
-    """Process graph with Cucuringu algorithm, using optimized version for large networks."""
-    
-    # Start timing
-    start_time = time.time()
-    
-    # Use optimized version for large networks
-    """if graph.number_of_nodes() >= 500:
-        print(f"Large network detected ({graph.number_of_nodes()} nodes). Using optimized Cucuringu implementation.")
-        from .optimized_cucuringu import OptimizedLowRankCore
-        cucuringu = OptimizedLowRankCore(beta=beta, respect_params=True)
-    else:"""
+
     cucuringu = cpnet.LowRankCore(beta=beta)
     
-    # Store the parameters before detection
     original_beta = beta
     
-    # Detect core-periphery structure
     cucuringu.detect(graph)
     x = {node: cucuringu.x_[i] for i, node in enumerate(graph.nodes())}
     
-    print(f"Using coreness threshold of 0.5 for core-periphery classification")
     c = classify_nodes_by_coreness(graph, x, threshold=0.5)
     
-    # End timing
-    end_time = time.time()
-    execution_time = end_time - start_time
-    
-    # Assign execution time to cucuringu instance
-    cucuringu.execution_time = execution_time
-    
-    # Get algorithm stats 
     stats = getattr(cucuringu, 'get_stats', lambda: {})()
     
-    # Add more stats information
     stats.update({
-        "execution_time": execution_time,
         "beta": original_beta,
         "final_score": getattr(cucuringu, "Q_", 0),
         "algorithm": "Cucuringu Low Rank Core",
-        "explanation": f"Cucuringu Low Rank Core algorithm completed in {execution_time:.4f} seconds with beta={original_beta}."
     })
-    
-    print(f"Core-periphery detection completed in {execution_time:.4f} seconds")
-    print(f"Best score: {getattr(cucuringu, 'Q_', 0):.4f}")
     
     return c, x, stats
 
@@ -363,7 +347,6 @@ def get_core_stats(graph, classifications):
                     else:
                         periphery_nodes.add(node)
         else:
-            # Unknown format, treat all nodes as periphery
             periphery_nodes = set(graph.nodes())
     
     total_nodes = len(core_nodes) + len(periphery_nodes)
@@ -393,12 +376,10 @@ def get_core_stats(graph, classifications):
     
     core_percentage = (len(core_nodes) / total_nodes * 100) if total_nodes > 0 else 0
     
-    # Optimize edge classification with a single pass
     core_core_edges = 0
     core_periphery_edges = 0
     periphery_periphery_edges = 0
     
-    # More efficient edge classification using sets
     for u, v in graph.edges():
         if u in core_nodes:
             if v in core_nodes:
@@ -411,16 +392,13 @@ def get_core_stats(graph, classifications):
             else:
                 periphery_periphery_edges += 1
     
-    # Calculate core density directly
     max_core_edges = len(core_nodes) * (len(core_nodes) - 1) / 2
     core_density = core_core_edges / max_core_edges if max_core_edges > 0 else 0.0
     
-    # Calculate periphery-core connectivity
     periphery_core_connectivity = (core_periphery_edges / len(periphery_nodes)) if len(periphery_nodes) > 0 else 0.0
     
     total_edges = graph.number_of_edges()
     
-    # Calculate percentages
     core_core_percentage = (core_core_edges / total_edges * 100) if total_edges > 0 else 0
     core_periphery_percentage = (core_periphery_edges / total_edges * 100) if total_edges > 0 else 0
     periphery_periphery_percentage = (periphery_periphery_edges / total_edges * 100) if total_edges > 0 else 0
@@ -428,12 +406,10 @@ def get_core_stats(graph, classifications):
     periphery_isolation = periphery_periphery_percentage
     core_periphery_ratio = (core_periphery_edges / total_edges) if total_edges > 0 else 0
     
-    # Calculate ideal pattern match scores
     max_core_core = len(core_nodes) * (len(core_nodes) - 1) / 2
     max_core_periphery = len(core_nodes) * len(periphery_nodes)
     max_periphery_periphery = len(periphery_nodes) * (len(periphery_nodes) - 1) / 2
     
-    # In ideal case: all core-core connections, all core-periphery connections, no periphery-periphery
     core_core_match = core_core_edges
     core_periphery_match = core_periphery_edges
     periphery_periphery_match = max_periphery_periphery - periphery_periphery_edges
@@ -443,7 +419,6 @@ def get_core_stats(graph, classifications):
     
     ideal_pattern_match = (total_pattern_score / max_pattern_score * 100) if max_pattern_score > 0 else 0
     
-    # Set interpretation texts
     if core_density >= 0.8:
         core_density_interpretation = "Very high density - strongly connected core"
     elif core_density >= 0.6:
@@ -475,7 +450,6 @@ def get_core_stats(graph, classifications):
     else:
         pattern_match_interpretation = "Poor match to ideal core-periphery structure"
     
-    # Determine structure quality
     structure_quality = "uncertain"
     if core_density > 0.7 and periphery_periphery_percentage < 10:
         structure_quality = "strong"
@@ -668,7 +642,8 @@ def get_algorithm_function(algorithm):
         "cucuringu": process_graph_with_Cucuringu
     }
     
-    if algorithm not in algorithm_map:
+    algo_lower = algorithm.lower()
+    if algo_lower not in algorithm_map:
         raise ValueError(f"Unknown algorithm: {algorithm}")
     
-    return algorithm_map[algorithm]
+    return algorithm_map[algo_lower]

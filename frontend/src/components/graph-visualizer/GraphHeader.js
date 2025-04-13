@@ -30,12 +30,10 @@ const GraphHeader = ({
       mb: 2, 
       flexWrap: 'wrap'
     }}>
-      {/* Left side - Title */}
       <Typography variant="h5" component="h2" sx={{ mr: 2, fontWeight: 'bold' }}>
         Graph Visualization
       </Typography>
       
-      {/* Right side - Download buttons */}
       <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
         {nodeCsvFile && (
           <Tooltip title="Download Node Data (CSV)">
@@ -92,7 +90,6 @@ const GraphHeader = ({
         </Tooltip>
       </Box>
       
-      {/* Success notification */}
       <Snackbar 
         open={downloadSuccess} 
         autoHideDuration={2000} 

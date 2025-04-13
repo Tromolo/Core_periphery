@@ -26,37 +26,30 @@ const GraphControls = ({
   handleToggleLabels,
   rendererReady
 }) => {
-  // For debugging
   useEffect(() => {
     console.log("GraphControls rendererReady:", rendererReady);
   }, [rendererReady]);
 
-  // Safe handler functions that check if renderer is ready
   const safeToggleForceAtlas2 = () => {
     console.log("Attempting to toggle ForceAtlas2, rendererReady:", rendererReady);
-    // Let's assume it's ready if the handler is called
     toggleForceAtlas2();
   };
   
   const safeCenterView = () => {
     console.log("Attempting to center view, rendererReady:", rendererReady);
-    // Let's assume it's ready if the handler is called
     centerView();
   };
   
   const safeToggleLabels = () => {
     console.log("Attempting to toggle labels, rendererReady:", rendererReady);
-    // Let's assume it's ready if the handler is called
     handleToggleLabels();
   };
   
   const safeHandleNodeSizeChange = (event, newValue) => {
     console.log("Attempting to change node size, rendererReady:", rendererReady);
-    // Let's assume it's ready if the handler is called
     handleNodeSizeChange(event, newValue);
   };
   
-  // Force enable for all controls - we'll handle safety in the handler functions
   const forceEnabled = true;
   
   return (
@@ -69,7 +62,6 @@ const GraphControls = ({
       }}
     >
       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center' }}>
-        {/* Layout controls */}
         <Box sx={{ minWidth: '240px' }}>
           <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
             Layout Controls:
@@ -82,7 +74,7 @@ const GraphControls = ({
                 size="small"
                 startIcon={isForceAtlas2Running ? <StopIcon /> : <PlayArrowIcon />}
                 onClick={safeToggleForceAtlas2}
-                disabled={false} // Always enabled
+                disabled={false}
               >
                 {isForceAtlas2Running ? "Stop Layout" : "Start Layout"}
               </Button>
@@ -95,7 +87,7 @@ const GraphControls = ({
                 size="small"
                 startIcon={<CenterFocusStrongIcon />}
                 onClick={safeCenterView}
-                disabled={false} // Always enabled
+                disabled={false}
               >
                 Center
               </Button>
@@ -105,7 +97,6 @@ const GraphControls = ({
         
         <Divider orientation="vertical" flexItem />
         
-        {/* Node size slider */}
         <Box sx={{ minWidth: '180px', maxWidth: '300px', flex: 1 }}>
           <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
             Node Size:
@@ -117,7 +108,7 @@ const GraphControls = ({
             step={0.5}
             onChange={safeHandleNodeSizeChange}
             valueLabelDisplay="auto"
-            disabled={false} // Always enabled
+            disabled={false}
             sx={{ 
               mt: 1,
               '& .MuiSlider-thumb': {
@@ -129,7 +120,6 @@ const GraphControls = ({
         
         <Divider orientation="vertical" flexItem />
         
-        {/* Label toggle */}
         <Box>
           <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
             Labels:
@@ -141,7 +131,7 @@ const GraphControls = ({
               size="small"
               startIcon={showLabels ? <LabelIcon /> : <LabelOffIcon />}
               onClick={safeToggleLabels}
-              disabled={false} // Always enabled
+              disabled={false}
             >
               {showLabels ? "Hide Labels" : "Show Labels"}
             </Button>

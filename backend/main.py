@@ -3,8 +3,10 @@ import networkx as nx
 import asyncio
 import time
 import glob
+import json
 from collections import Counter
-
+            
+import concurrent.futures
 from fastapi import FastAPI, File, UploadFile, HTTPException, Form, Body
 from fastapi.responses import JSONResponse
 import uvicorn
@@ -53,39 +55,67 @@ app.add_middleware(
 global_graph = None
 
 @app.post("/upload_graph")
-async def upload_graph(file: UploadFile = File(...)):
+async def upload_graph(
+    file: UploadFile = File(...),
+    selectedAnalyses: str = Form(...)
+):
     try:
         global global_graph
         
+        try:
+            analyses_to_run = json.loads(selectedAnalyses)
+            print(f"Analyses selected: {analyses_to_run}")
+        except json.JSONDecodeError:
+            raise HTTPException(status_code=400, detail="Invalid format for selectedAnalyses")
+
         try:
             global_graph = await load_graph_file(file)
             print(f"Graph loaded successfully: {global_graph.number_of_nodes()} nodes, {global_graph.number_of_edges()} edges")
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Error loading file: {str(e)}")
 
+        network_metrics = {}
+        community_data = None
+        degree_distribution = None
+        
         try:
-            network_metrics = calculate_network_metrics(global_graph)
-            community_data = prepare_community_analysis_data(global_graph)
-            
+            if analyses_to_run.get("networkStats", False) or analyses_to_run.get("degreeDistribution", False) or analyses_to_run.get("connectedComponents", False):
+                print("Calculating basic network metrics...")
+                calculated_metrics = calculate_network_metrics(global_graph)
+                
+                if analyses_to_run.get("networkStats", False):
+                    network_metrics.update({
+                        k: v for k, v in calculated_metrics.items() 
+                        if k not in ['degree_distribution', 'connected_components']
+                    })
+                
+                if analyses_to_run.get("degreeDistribution", False):
+                    degree_distribution = calculated_metrics.get('degree_distribution')
+                    network_metrics['degree_distribution'] = degree_distribution
+                
+                if analyses_to_run.get("connectedComponents", False):
+                    if 'connected_components' in calculated_metrics:
+                        network_metrics['connected_components'] = calculated_metrics['connected_components']
+
+            if analyses_to_run.get("communityAnalysis", False):
+                print("Calculating community data...")
+                community_data = prepare_community_analysis_data(global_graph)
+
             graph_data = {
                 "nodes": [],
                 "edges": []
             }
-            
             degrees = dict(global_graph.degree())
             for node in global_graph.nodes():
                 node_degree = degrees.get(node, 0)
-                
                 graph_data["nodes"].append({
                     "id": str(node),
                     "degree": node_degree,
                 })
-                
             for edge in global_graph.edges():
                 source, target = edge
                 edge_data = global_graph.get_edge_data(source, target) or {}
                 weight = edge_data.get('weight', 1.0)
-                
                 graph_data["edges"].append({
                     "id": f"{source}-{target}",
                     "source": str(source),
@@ -93,20 +123,21 @@ async def upload_graph(file: UploadFile = File(...)):
                     "weight": float(weight)
                 })
             
-            degree_distribution = network_metrics.get('degree_distribution', [])
-            
         except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Error calculating network metrics: {str(e)}")
-        
-        return JSONResponse(
-            content={
-                "message": "Graph uploaded and network metrics calculated successfully",
-                "network_metrics": network_metrics,
-                "community_data": community_data,
-                "graph_data": graph_data,
-                "degree_distribution": degree_distribution
-            }
-        )
+            raise HTTPException(status_code=400, detail=f"Error during analysis: {str(e)}")
+
+        response_content = {
+            "message": "Graph uploaded and analysis completed based on selection.",
+            "graph_data": graph_data
+        }
+        if network_metrics:
+            response_content["network_metrics"] = network_metrics
+        if community_data is not None:
+            response_content["community_data"] = community_data
+        #if degree_distribution is not None:
+        #    response_content["degree_distribution"] = degree_distribution
+
+        return JSONResponse(content=response_content)
         
     except HTTPException as he:
         raise he
@@ -119,11 +150,9 @@ async def upload_graph(file: UploadFile = File(...)):
 async def analyze_uploaded_graph(
     file: UploadFile = File(...),
     algorithm: str = Form(...),
-    # Rombach algorithm parameters
     alpha: float = Form(0.5),
     beta: float = Form(0.8),
     num_runs: int = Form(10),
-    # Generic parameters
     threshold: float = Form(0.5),
     calculate_closeness: bool = Form(False),
     calculate_betweenness: bool = Form(False)
@@ -285,42 +314,59 @@ async def analyze_uploaded_graph(
             "pattern_match_interpretation": pattern_match_interpretation,
             "structure_quality": structure_quality
         }
-        
-        if calculate_closeness:
-            try:
-                print("Computing closeness centrality...")
-                closeness = nx.closeness_centrality(graph)
-                centrality_values = list(closeness.values())
-                if centrality_values:
-                    centrality_summary["closeness"] = {
-                        "avg": sum(centrality_values) / len(centrality_values),
-                        "max": max(centrality_values),
-                        "min": min(centrality_values)
-                    }
-                else:
+        if calculate_closeness or calculate_betweenness:
+            print("Computing centrality measures...")            
+            def compute_closeness():
+                try:
+                    print("Computing closeness centrality...")
+                    close_cent = nx.closeness_centrality(graph)
+                    centrality_values = list(close_cent.values())
+                    if centrality_values:
+                        centrality_summary["closeness"] = {
+                            "avg": sum(centrality_values) / len(centrality_values),
+                            "max": max(centrality_values),
+                            "min": min(centrality_values)
+                        }
+                    else:
+                        centrality_summary["closeness"] = {"avg": 0, "max": 0, "min": 0}
+                    return close_cent
+                except Exception as e:
+                    print(f"Warning: Failed to compute closeness centrality: {str(e)}")
                     centrality_summary["closeness"] = {"avg": 0, "max": 0, "min": 0}
-            except Exception as e:
-                print(f"Warning: Failed to compute closeness centrality: {str(e)}")
-                centrality_summary["closeness"] = {"avg": 0, "max": 0, "min": 0}
-                closeness = {node: 0.0 for node in graph.nodes()}
-
-        if calculate_betweenness:
-            try:
-                print("Computing betweenness centrality...")
-                betweenness = nx.betweenness_centrality(graph)
-                centrality_values = list(betweenness.values())
-                if centrality_values:
-                    centrality_summary["betweenness"] = {
-                        "avg": sum(centrality_values) / len(centrality_values),
-                        "max": max(centrality_values),
-                        "min": min(centrality_values)
-                    }
-                else:
+                    return {node: 0.0 for node in graph.nodes()}
+            
+            def compute_betweenness():
+                try:
+                    print("Computing betweenness centrality...")
+                    between_cent = nx.betweenness_centrality(graph)
+                    centrality_values = list(between_cent.values())
+                    if centrality_values:
+                        centrality_summary["betweenness"] = {
+                            "avg": sum(centrality_values) / len(centrality_values),
+                            "max": max(centrality_values),
+                            "min": min(centrality_values)
+                        }
+                    else:
+                        centrality_summary["betweenness"] = {"avg": 0, "max": 0, "min": 0}
+                    return between_cent
+                except Exception as e:
+                    print(f"Warning: Failed to compute betweenness centrality: {str(e)}")
                     centrality_summary["betweenness"] = {"avg": 0, "max": 0, "min": 0}
-            except Exception as e:
-                print(f"Warning: Failed to compute betweenness centrality: {str(e)}")
-                centrality_summary["betweenness"] = {"avg": 0, "max": 0, "min": 0}
-                betweenness = {node: 0.0 for node in graph.nodes()}
+                    return {node: 0.0 for node in graph.nodes()}
+            
+            if calculate_closeness and calculate_betweenness:
+                with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+                    future_closeness = executor.submit(compute_closeness)
+                    future_betweenness = executor.submit(compute_betweenness)
+                    
+                    closeness = future_closeness.result()
+                    betweenness = future_betweenness.result()
+                    
+                print("Completed both centrality calculations in parallel")
+            elif calculate_closeness:
+                closeness = compute_closeness()
+            elif calculate_betweenness:
+                betweenness = compute_betweenness()
 
         node_csv_file = generate_csv(
             graph, 
@@ -355,7 +401,7 @@ async def analyze_uploaded_graph(
             classifications, 
             coreness, 
             algorithm, 
-            params, 
+            {**params, "final_score": algorithm_stats.get("final_score")}, 
             pre_calculated_core_stats=core_stats
         )
 
@@ -406,12 +452,12 @@ async def analyze_uploaded_graph(
         return JSONResponse(content={
             "message": f"Core-periphery analysis with {algorithm} algorithm completed successfully",
             "network_metrics": network_metrics,
-            "algorithm_stats": algorithm_stats,
             "top_nodes": top_nodes_result,
             "node_csv_file": node_csv_file,
             "edge_csv_file": edge_csv_file,
             "gdf_file": gdf_file,
             "graph_data": graph_data,
+            "algorithm_stats": algorithm_stats
         })
         
     except HTTPException as he:

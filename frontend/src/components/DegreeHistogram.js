@@ -9,14 +9,11 @@ const DegreeHistogram = ({ graphData, communityData, networkMetrics }) => {
   const [showLogScale, setShowLogScale] = useState(false);
   const chartContainerRef = useRef(null);
   const [chartLoading, setChartLoading] = useState(false);
-  // Distribution is now the only view - removing viewMode state since we'll always show distribution
   
-  // If no graph data is available, don't render anything
   if ((!graphData || !graphData.nodes) && (!communityData || !communityData.graph_data || !communityData.graph_data.nodes)) {
     return null;
   }
 
-  // Determine which data source to use
   const nodes = useMemo(() => {
     if (graphData && graphData.nodes) {
       return graphData.nodes;
@@ -26,7 +23,6 @@ const DegreeHistogram = ({ graphData, communityData, networkMetrics }) => {
     return [];
   }, [graphData, communityData, forceUpdate]);
 
-  // Get edges from the graph data
   const edges = useMemo(() => {
     if (graphData && graphData.edges) {
       return graphData.edges;
@@ -36,11 +32,9 @@ const DegreeHistogram = ({ graphData, communityData, networkMetrics }) => {
     return [];
   }, [graphData, communityData, forceUpdate]);
 
-  // Use node degrees from the existing data rather than recalculating
   const nodeDegreesMap = useMemo(() => {
     const degreeMap = {};
     
-    // Use degree values that are already in the node data
     nodes.forEach(node => {
       if (node.degree !== undefined) {
         degreeMap[node.id] = node.degree;
@@ -52,7 +46,6 @@ const DegreeHistogram = ({ graphData, communityData, networkMetrics }) => {
     return degreeMap;
   }, [nodes, forceUpdate]);
 
-  // Function to handle refresh
   const handleRefresh = useCallback(() => {
     setChartLoading(true);
     setTimeout(() => {
@@ -61,9 +54,7 @@ const DegreeHistogram = ({ graphData, communityData, networkMetrics }) => {
     }, 300);
   }, []);
 
-  // Calculate degree distribution from graph data
   const degreeDistribution = useMemo(() => {
-    // If backend provided a pre-calculated degree distribution, use it
     if (graphData?.degree_distribution) {
       console.log("Using pre-calculated degree distribution:", graphData.degree_distribution);
       const distribution = graphData.degree_distribution.map(item => ({
@@ -71,7 +62,6 @@ const DegreeHistogram = ({ graphData, communityData, networkMetrics }) => {
         count: item.count
       })).sort((a, b) => a.degree - b.degree);
     
-    // Add log values for power law analysis
     distribution.forEach(item => {
       if (item.degree > 0 && item.count > 0) {
         item.logDegree = Math.log10(item.degree);
@@ -84,30 +74,24 @@ const DegreeHistogram = ({ graphData, communityData, networkMetrics }) => {
     
     return distribution;
     } else if (nodes.length > 0) {
-      // Calculate degree distribution manually from node degrees
-      console.log("Calculating degree distribution manually from nodes");
       const degreeCounts = {};
       
-      // Count occurrences of each degree
       nodes.forEach(node => {
         const degree = nodeDegreesMap[node.id] || 0;
         degreeCounts[degree] = (degreeCounts[degree] || 0) + 1;
       });
       
-      // Convert to array format
       const distribution = Object.entries(degreeCounts)
         .map(([degree, count]) => ({
           degree: parseInt(degree),
           count
         }))
         .sort((a, b) => a.degree - b.degree);
-      
-      // Add log values
+
       distribution.forEach(item => {
         if (item.degree > 0 && item.count > 0) {
           item.logDegree = Math.log10(item.degree);
           item.logCount = Math.log10(item.count);
-          // Add real value labels for log scale
           item.realDegree = item.degree;
         } else {
           item.logDegree = 0;
@@ -120,25 +104,18 @@ const DegreeHistogram = ({ graphData, communityData, networkMetrics }) => {
       return distribution;
     }
     
-    // Return empty array if no data available
     return [];
   }, [graphData, nodes, nodeDegreesMap, forceUpdate]);
 
-  // Calculate basic network statistics that can be reliably derived from the data
   const basicStats = useMemo(() => {
-    // If we don't have nodes and edges, return empty stats
     if (!nodes.length || !edges.length) return {};
     
-    // Total nodes and edges are straightforward
     const nodeCount = nodes.length;
     const edgeCount = edges.length;
     
-    // Calculate degree-based statistics
     const degrees = nodes.map(node => {
-      // First try to use our calculated degree
       let degree = nodeDegreesMap[node.id] || 0;
       
-      // If that's 0, try to use the degree property from the node if available
       if (degree === 0 && node.degree !== undefined) {
         degree = node.degree;
       }
@@ -151,15 +128,12 @@ const DegreeHistogram = ({ graphData, communityData, networkMetrics }) => {
     const max = Math.max(...degrees);
     const min = Math.min(...degrees);
     
-    // Calculate median
     const sortedDegrees = [...degrees].sort((a, b) => a - b);
     const mid = Math.floor(sortedDegrees.length / 2);
     const median = sortedDegrees.length % 2 === 0
       ? (sortedDegrees[mid - 1] + sortedDegrees[mid]) / 2
       : sortedDegrees[mid];
     
-    // Calculate density
-    // Density = 2*E/N(N-1) for undirected networks
     const density = (2 * edgeCount) / (nodeCount * (nodeCount - 1));
     
     return {
@@ -177,7 +151,6 @@ const DegreeHistogram = ({ graphData, communityData, networkMetrics }) => {
     if (networkMetrics && typeof networkMetrics.updateStats === 'function') {
       console.log("DegreeHistogram updating stats:", basicStats);
       try {
-        // Don't update if there are no stats or if we already have these values
         if (Object.keys(basicStats).length > 0 && 
             (!networkMetrics.basicStats || 
               JSON.stringify(networkMetrics.basicStats) !== JSON.stringify(basicStats))) {
@@ -229,7 +202,6 @@ const DegreeHistogram = ({ graphData, communityData, networkMetrics }) => {
     }, 300);
   };
 
-  // Effect to handle chart loading state when component mounts or data changes
   useEffect(() => {
     setChartLoading(true);
     const timer = setTimeout(() => {
@@ -239,45 +211,37 @@ const DegreeHistogram = ({ graphData, communityData, networkMetrics }) => {
     return () => clearTimeout(timer);
   }, [graphData, communityData, forceUpdate]);
 
-  // Configure the AtlasGroup2-style visualization for log scale
   const renderScatterPlot = () => {
-    // Filter out zero values that can't be displayed in log scale
     const validLogData = degreeDistribution.filter(item => item.degree > 0 && item.count > 0);
     
-    // Calculate point sizes based on count
     const maxCount = Math.max(...validLogData.map(d => d.count));
     const minSize = 5;
     const maxSize = 24;
 
-    // Get log-scale reference lines for powers of 10
     const maxDegree = Math.max(...validLogData.map(d => d.degree));
     const referenceValues = [];
     for (let i = 0; i <= Math.log10(maxDegree); i++) {
       referenceValues.push(Math.pow(10, i));
     }
 
-    // Prepare enhanced data with calculated sizes and colors
     const enhancedData = validLogData.map(item => ({
       ...item,
       size: minSize + (maxSize - minSize) * (Math.log10(item.count) / Math.log10(maxCount)),
       pointColor: getScatterPointColor(item.degree, item.count)
     }));
     
-    // Calculate a proper domain with some padding
     const maxLogX = Math.ceil(Math.log10(maxDegree)) + 0.1;
     const maxLogY = Math.ceil(Math.log10(maxCount)) + 0.1;
     
-    // Generate ticks safely
     const maxTickValue = Math.max(...degreeDistribution.map(d => d.degree), 1);
     const safeTicksArray = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000].filter(n => n <= maxTickValue * 1.2);
     
     return (
       <ScatterChart
-        margin={{ top: 20, right: 40, left: 60, bottom: 50 }} // Increased right margin
+        margin={{ top: 20, right: 40, left: 60, bottom: 50 }}
       >
         <CartesianGrid strokeDasharray="4 4" stroke="rgba(0,0,0,0.06)" />
         
-        {/* Add vertical reference lines at powers of 10 */}
         {referenceValues.map((value, index) => (
           <ReferenceLine 
             key={`ref-x-${index}`} 
@@ -291,7 +255,7 @@ const DegreeHistogram = ({ graphData, communityData, networkMetrics }) => {
           dataKey="degree"
           type="number"
           scale="log"
-          domain={[0.9, Math.pow(10, maxLogX)]} // Ensure rightmost points are visible
+          domain={[0.9, Math.pow(10, maxLogX)]}
           allowDataOverflow={true}
           label={{ 
             value: 'Degree (log scale)', 
@@ -303,7 +267,6 @@ const DegreeHistogram = ({ graphData, communityData, networkMetrics }) => {
           tickMargin={10}
           ticks={safeTicksArray}
           tickFormatter={tick => {
-            // Only show clean values
             if (tick === 1 || tick === 10 || tick === 100 || tick === 1000) {
               return tick;
             }
@@ -315,7 +278,7 @@ const DegreeHistogram = ({ graphData, communityData, networkMetrics }) => {
           dataKey="count"
           type="number"
           scale="log"
-          domain={[0.9, Math.pow(10, maxLogY)]} // Ensure top points are visible
+          domain={[0.9, Math.pow(10, maxLogY)]}
           allowDataOverflow={true}
           label={{ 
             value: 'Count (log scale)', 
@@ -365,7 +328,6 @@ const DegreeHistogram = ({ graphData, communityData, networkMetrics }) => {
     );
   };
 
-  // For regular mode, render bar chart
   const renderBarChart = () => {
     return (
       <BarChart 
@@ -392,7 +354,7 @@ const DegreeHistogram = ({ graphData, communityData, networkMetrics }) => {
         />
         <YAxis 
           scale="linear"
-          domain={[0, dataMax => Math.ceil(dataMax * 1.1)]} // Add 10% buffer at the top
+          domain={[0, dataMax => Math.ceil(dataMax * 1.1)]}
           label={{ 
             value: 'Count', 
             angle: -90, 
@@ -421,7 +383,7 @@ const DegreeHistogram = ({ graphData, communityData, networkMetrics }) => {
           dataKey="count"
           fill={theme.palette.primary.main} 
           minPointSize={3}
-          barSize={12} // Increased from 5 to 12
+          barSize={12}
           isAnimationActive={false}
           name="Count"
         >

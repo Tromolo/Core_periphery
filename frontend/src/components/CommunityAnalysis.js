@@ -31,7 +31,6 @@ import PauseIcon from '@mui/icons-material/Pause';
 import CheckIcon from '@mui/icons-material/Check';
 import CenterFocusStrongIcon from '@mui/icons-material/CenterFocusStrong';
 
-// Add a style tag to ensure canvas elements fill their container
 const sigmaCanvasStyle = `
   .sigma-container canvas {
     width: 100% !important;
@@ -69,70 +68,56 @@ const CommunityAnalysis = ({ communityData }) => {
   const containerRef = useRef(null);
   const layoutWorkerRef = useRef(null);
   const graphRef = useRef(null);
+  const highlightedNodes = useRef(new Map());
+  const initDone = useRef(false);
+  const layoutTransitionRef = useRef(false);
+  const faWorkerRef = useRef(null);
+  const autoStartRef = useRef(false);
+  
   const [sigmaLoaded, setSigmaLoaded] = useState(false);
   const [sigmaError, setSigmaError] = useState(null);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
   const [nodeSize, setNodeSize] = useState(1.0);
   const [showLabels, setShowLabels] = useState(false);
   const [isLayoutRunning, setIsLayoutRunning] = useState(false);
-  const highlightedNodes = useRef(new Map());
-  const initDone = useRef(false);
-  const layoutTransitionRef = useRef(false);
-  const faWorkerRef = useRef(null);
   const [isForceAtlas2Running, setIsForceAtlas2Running] = useState(false);
   const [downloadSuccess, setDownloadSuccess] = useState(false);
-  const autoStartRef = useRef(false);
 
-  if (!communityData) return null;
-  
-  // Check if we have real data or just placeholder data
-  if (communityData.num_communities === 0 || 
-      !communityData.graph_data || 
-      !communityData.graph_data.nodes || 
-      communityData.graph_data.nodes.length === 0) {
-    return (
-      <Paper sx={{ p: 4, borderRadius: 2, boxShadow: 3 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flexDirection: 'column', p: 4 }}>
-          <CircularProgress size={40} />
-          <Typography variant="h6" sx={{ mt: 2 }}>
-            Loading community data...
-          </Typography>
-        </Box>
-      </Paper>
-    );
-  }
-
+  const safeData = communityData || {};
   const { 
-    num_communities, 
-    mean_size, 
-    max_size, 
-    min_size, 
-    modularity, 
-    size_distribution,
-    graph_data
-  } = communityData;
+    num_communities = 0, 
+    mean_size = 0, 
+    max_size = 0, 
+    min_size = 0, 
+    modularity = 0, 
+    size_distribution = [],
+    graph_data = { nodes: [], edges: [] },
+    community_membership = {}
+  } = safeData;
 
-  // Enhanced colors for the communities with better saturation (AtlasGroup2 style)
+  const isLoading = !communityData || communityData.loading === true;
+  const hasValidData = communityData && 
+                     communityData.num_communities !== 0 && 
+                     communityData.graph_data && 
+                     communityData.graph_data.nodes && 
+                     communityData.graph_data.nodes.length > 0;
+
   const COLORS = [
     '#3366CC', '#DC3912', '#FF9900', '#109618', '#990099', '#0099C6',
     '#DD4477', '#66AA00', '#B82E2E', '#316395', '#994499', '#22AA99',
     '#AAAA11', '#6633CC', '#E67300', '#8B0707', '#329262', '#5574A6'
   ];
 
-  // Add this useMemo to memoize the COLORS array
   const memoizedColors = useMemo(() => COLORS, []);
 
-  // Prepare data for histogram
   const histogramData = size_distribution.map((item, index) => ({
     name: `Community ${item.community}`,
     size: item.size,
     color: memoizedColors[index % memoizedColors.length]
   }));
 
-  // Sort histogram data by size (descending)
   histogramData.sort((a, b) => b.size - a.size);
 
-  // Monitor container size changes
   useLayoutEffect(() => {
     if (containerRef.current) {
       const updateSize = () => {
@@ -144,7 +129,6 @@ const CommunityAnalysis = ({ communityData }) => {
         updateSize();
         if (rendererRef.current) {
           try {
-            // Just refresh the renderer without changing the camera state
             rendererRef.current.refresh();
           } catch (e) {
             console.error("Error refreshing Sigma during resize:", e);
@@ -153,18 +137,15 @@ const CommunityAnalysis = ({ communityData }) => {
       });
       
       resizeObserver.observe(containerRef.current);
-      updateSize(); // Initial size calculation
-      
+      updateSize();
       return () => {
         resizeObserver.disconnect();
       };
     }
   }, []);
 
-  // Clean up resources on unmount
-  useEffect(() => {
+    useEffect(() => {
     return () => {
-      // Clean up Sigma renderer
       if (rendererRef.current) {
         console.log("Cleaning up Sigma renderer on unmount");
         try {
@@ -175,7 +156,6 @@ const CommunityAnalysis = ({ communityData }) => {
         rendererRef.current = null;
       }
       
-      // Clean up ForceAtlas2 worker
       if (layoutWorkerRef.current) {
         console.log("Cleaning up ForceAtlas2 worker on unmount");
         try {
@@ -189,7 +169,6 @@ const CommunityAnalysis = ({ communityData }) => {
     };
   }, []);
 
-  // Create FA2Layout worker with a render callback
   const createLayoutWorker = () => {
     try {
       if (!graphRef.current || !rendererRef.current) {
@@ -212,18 +191,15 @@ const CommunityAnalysis = ({ communityData }) => {
         barnesHutTheta: 0.5,
       };
       
-      // Create a new FA2Layout worker with our graph and settings
       const worker = new FA2Layout(graphRef.current, {
         settings: settings,
         getEdgeWeight: 'weight'
       });
       
-      // Setup the refresh callback
       const renderFrame = () => {
         if (rendererRef.current) {
           try {
             rendererRef.current.refresh();
-            // Continue animation loop if worker is still running
             if (worker.isRunning()) {
               requestAnimationFrame(renderFrame);
             }
@@ -233,7 +209,6 @@ const CommunityAnalysis = ({ communityData }) => {
         }
       };
       
-      // Add a refresh callback
       worker.onTick = () => {
         requestAnimationFrame(renderFrame);
       };
@@ -245,26 +220,21 @@ const CommunityAnalysis = ({ communityData }) => {
     }
   };
 
-  // Update the useEffect to automatically start ForceAtlas2 after initialization
   useEffect(() => {
     let sigma = null;
     
     if (containerRef.current && graph_data) {
       console.log("Initializing graph in useEffect");
       
-      // Prevent reinitialization during layout transition
       if (layoutTransitionRef.current) {
         console.log("Skipping reinitialization during layout transition");
         return;
       }
-
-      // Check if we're currently running ForceAtlas2 - don't reinitialize if so
       if (isForceAtlas2Running && faWorkerRef.current) {
         console.log("Skipping reinitialization while ForceAtlas2 is running");
         return;
       }
 
-      // Cleanup previous instances
     if (rendererRef.current) {
         console.log("Cleaning up previous renderer");
       try {
@@ -276,17 +246,14 @@ const CommunityAnalysis = ({ communityData }) => {
       }
       
       if (sigmaRef.current) {
-        // Clean up any canvas elements left by previous renderer
         while (sigmaRef.current.firstChild) {
           sigmaRef.current.removeChild(sigmaRef.current.firstChild);
         }
       }
       
-      // Only clean up ForceAtlas2 if it's not running
       if (faWorkerRef.current && !isForceAtlas2Running) {
         console.log("Cleaning up previous ForceAtlas2 worker");
         try {
-          // Cancel animation frame if it exists
           if (faWorkerRef.current.animationFrameId) {
             cancelAnimationFrame(faWorkerRef.current.animationFrameId);
           }
@@ -296,22 +263,19 @@ const CommunityAnalysis = ({ communityData }) => {
           console.error("Error stopping ForceAtlas2 worker:", e);
         }
       }
-      
-      // Only reset running state if we're not actually running
+
       if (!isForceAtlas2Running) {
         setIsForceAtlas2Running(false);
       }
       
       try {
         console.log("Creating new graph instance");
-        // Create a new graph or clear the existing one
         if (!graphRef.current) {
           graphRef.current = new Graph();
         } else {
           graphRef.current.clear();
         }
         
-        // Add nodes to the graph
         if (graph_data.nodes && graph_data.nodes.length > 0) {
           console.log(`Adding ${graph_data.nodes.length} nodes to graph`);
           
@@ -321,7 +285,6 @@ const CommunityAnalysis = ({ communityData }) => {
               ? graph_data.communities[node.id] 
               : 0;
               
-              // Add node with attributes compatible with Sigma 3.0.1
               graphRef.current.addNode(node.id, {
                 x: node.x !== undefined ? node.x : Math.random(),
                 y: node.y !== undefined ? node.y : Math.random(),
@@ -334,8 +297,7 @@ const CommunityAnalysis = ({ communityData }) => {
               console.error(`Error adding node ${node.id}:`, e);
             }
           });
-          
-          // Add edges to the graph
+
           if (graph_data.edges && graph_data.edges.length > 0) {
             console.log(`Adding ${graph_data.edges.length} edges to graph`);
             
@@ -344,8 +306,8 @@ const CommunityAnalysis = ({ communityData }) => {
                 if (graphRef.current.hasNode(edge.source) && graphRef.current.hasNode(edge.target)) {
                   graphRef.current.addEdge(edge.source, edge.target, {
                     weight: edge.weight || 1,
-                    color: "#ccc", // Add explicit edge color
-                    size: 1 // Add explicit size
+                    color: "#ccc", 
+                    size: 1 
                   });
                 }
               } catch (e) {
@@ -354,10 +316,9 @@ const CommunityAnalysis = ({ communityData }) => {
             });
           }
           
-          // Apply initial layout with a static ForceAtlas2
           console.log("Applying initial ForceAtlas2 layout (static)");
           const initialLayout = forceAtlas2.assign(graphRef.current, {
-            iterations: 20,  // Just a few iterations for initial layout
+            iterations: 20,
             settings: {
               gravity: 1,
               scalingRatio: 2,
@@ -367,7 +328,6 @@ const CommunityAnalysis = ({ communityData }) => {
           });
           
           console.log("Creating Sigma renderer");
-          // Create the renderer
           const renderer = new Sigma(graphRef.current, sigmaRef.current, {
             renderEdgeLabels: false,
             allowInvalidContainer: true,
@@ -379,18 +339,13 @@ const CommunityAnalysis = ({ communityData }) => {
             renderLabels: showLabels,
             minCameraRatio: 0.1,
             maxCameraRatio: 10,
-            // Settings for smoother interactions
             enableEdgeHoverEvents: true,
             enableNodeHoverEvents: true,
             hideEdgesOnMove: true,
-            // Explicitly set defaultEdgeType and defaultNodeType for compatibility
             defaultEdgeType: "line",
-            // Reduce WebGL program complexity
             nodeProgramClasses: {
-              // Let Sigma handle node program selection automatically
             },
             nodeReducer: (node, data) => {
-              // Apply node size multiplier from slider
               return {
                 ...data,
                 size: data.size * nodeSize
@@ -398,30 +353,25 @@ const CommunityAnalysis = ({ communityData }) => {
             }
           });
           
-          // Add display log to help debug
           console.log("Sigma renderer settings:", {
             renderEdgeLabels: false,
             showLabels,
             nodeSize,
           });
           
-          // Store the renderer
           rendererRef.current = renderer;
           setSigmaLoaded(true);
           setSigmaError(null);
           
           console.log("Graph initialized successfully with", graphRef.current.order, "nodes and", graphRef.current.size, "edges");
           
-          // Automatically start ForceAtlas2 layout if not already done
           if (!autoStartRef.current) {
             console.log("Auto-starting ForceAtlas2 layout");
-            // Use setTimeout to ensure component is fully mounted before starting layout
             setTimeout(() => {
               if (!isForceAtlas2Running && graphRef.current && rendererRef.current) {
                 autoStartRef.current = true;
                 toggleForceAtlas2();
-                
-                // Stop layout after 3 seconds
+
                 setTimeout(() => {
                   if (isForceAtlas2Running && faWorkerRef.current) {
                     toggleForceAtlas2();
@@ -440,11 +390,8 @@ const CommunityAnalysis = ({ communityData }) => {
       }
     }
     
-    // Cleanup function
     return () => {
       console.log("Running cleanup in useEffect");
-      
-      // Skip cleanup if we're transitioning layouts or ForceAtlas2 is running
       if (layoutTransitionRef.current || isForceAtlas2Running) {
         console.log("Skipping cleanup during layout transition or while ForceAtlas2 is running");
         return;
@@ -463,7 +410,6 @@ const CommunityAnalysis = ({ communityData }) => {
       if (faWorkerRef.current) {
         try {
           console.log("Stopping ForceAtlas2 worker");
-          // Cancel animation frame if it exists
           if (faWorkerRef.current.animationFrameId) {
             cancelAnimationFrame(faWorkerRef.current.animationFrameId);
           }
@@ -475,19 +421,14 @@ const CommunityAnalysis = ({ communityData }) => {
         }
       }
       
-      // Reset auto-start flag when component unmounts
       autoStartRef.current = false;
     };
   }, [graph_data, containerRef, nodeSize, showLabels, isForceAtlas2Running, memoizedColors]);
 
-  // Improve WebGL context management
   useLayoutEffect(() => {
-    // Ensure only one WebGL context is created by limiting canvas initialization
     if (graphRef.current && rendererRef.current && sigmaRef.current) {
-      // If we already have a valid graph and renderer, ensure they stay connected
       console.log("Preserving existing Sigma graph connection");
       
-      // Apply any canvas size changes without recreating the WebGL context
       const updateCanvasSize = () => {
         if (!sigmaRef.current) return;
         
@@ -495,13 +436,10 @@ const CommunityAnalysis = ({ communityData }) => {
         const canvases = sigmaRef.current.querySelectorAll('canvas');
         
         canvases.forEach(canvas => {
-          // Only update CSS dimensions, not the actual canvas dimensions
-          // This avoids recreating the WebGL context
           canvas.style.width = `${rect.width}px`;
           canvas.style.height = `${rect.height}px`;
         });
         
-        // Refresh the renderer without changing WebGL context
         try {
           rendererRef.current?.refresh();
         } catch (e) {
@@ -509,10 +447,8 @@ const CommunityAnalysis = ({ communityData }) => {
         }
       };
       
-      // Initial size update
       updateCanvasSize();
-      
-      // Set up resize observer for the container
+
       const observer = new ResizeObserver(() => {
         updateCanvasSize();
       });
@@ -527,7 +463,6 @@ const CommunityAnalysis = ({ communityData }) => {
     }
   }, [graphRef.current, rendererRef.current, sigmaRef.current]);
 
-  // Apply node size changes
   useEffect(() => {
     if (rendererRef.current && graphRef.current) {
       try {
@@ -538,7 +473,6 @@ const CommunityAnalysis = ({ communityData }) => {
     }
   }, [nodeSize]);
 
-  // Apply label visibility changes
   useEffect(() => {
     if (rendererRef.current) {
       try {
@@ -550,58 +484,35 @@ const CommunityAnalysis = ({ communityData }) => {
     }
   }, [showLabels]);
 
-  // Update node size
   const handleNodeSizeChange = (e, newValue) => {
     setNodeSize(newValue);
   };
-
-  // Toggle node labels
+  
   const handleToggleLabels = () => {
     setShowLabels(!showLabels);
     
     if (rendererRef.current) {
       const renderer = rendererRef.current;
-      // Update label threshold - if showLabels is true, show all labels, otherwise hide most
       renderer.setSetting('labelRenderedSizeThreshold', !showLabels ? 1 : 12);
       renderer.refresh();
     }
   };
-
-  // Function to determine color based on modularity value
-  const getModularityColor = (value) => {
-    if (value >= 0.7) return 'success';
-    if (value >= 0.4) return 'info';
-    if (value >= 0.2) return 'warning';
-    return 'error';
-  };
-
-  // Function to get tooltip text based on modularity value
-  const getModularityTooltip = (value) => {
-    if (value >= 0.7) return 'Very strong community structure';
-    if (value >= 0.4) return 'Strong community structure';
-    if (value >= 0.2) return 'Moderate community structure';
-    return 'Weak community structure';
-  };
-
-  // Function to get descriptive text based on modularity value
-  const getModularityInterpretation = (value) => {
-    if (value >= 0.7) {
-      return `This network has a very strong community structure (modularity: ${value.toFixed(3)}). The communities are clearly defined and well separated from each other.`;
-    } else if (value >= 0.4) {
-      return `This network has a strong community structure (modularity: ${value.toFixed(3)}). The communities are well defined with relatively few connections between different communities.`;
-    } else if (value >= 0.2) {
-      return `This network has a moderate community structure (modularity: ${value.toFixed(3)}). The communities can be identified but have significant connections between them.`;
-    } else {
-      return `This network has a weak community structure (modularity: ${value.toFixed(3)}). The communities are not well defined and have many connections between them.`;
+  
+  const handleCenterView = () => {
+    if (rendererRef.current) {
+      try {
+        console.log("Centering the view");
+        rendererRef.current.getCamera().animatedReset();
+        rendererRef.current.refresh();
+      } catch (e) {
+        console.error("Error centering view:", e);
+      }
     }
   };
-
-  // Fix ForceAtlas2 implementation to ensure it runs properly
+  
   const toggleForceAtlas2 = () => {
-    // Log the current state before toggling
     console.log("Toggle ForceAtlas2 - Current state:", isForceAtlas2Running ? "running" : "stopped");
     
-    // Check if renderer and graph are available
     if (!rendererRef.current || !graphRef.current) {
       console.error("Cannot toggle ForceAtlas2: renderer or graph is not available", {
         renderer: !!rendererRef.current,
@@ -610,16 +521,12 @@ const CommunityAnalysis = ({ communityData }) => {
       return;
     }
     
-    // Set transition flag to prevent reinitialization
     layoutTransitionRef.current = true;
     
     if (isForceAtlas2Running) {
-      // Stop the layout if it's running
       console.log("Stopping ForceAtlas2");
       try {
-        // Ensure we have a valid worker before trying to stop
         if (faWorkerRef.current) {
-          // Cancel animation frame first if it exists
           if (faWorkerRef.current.animationFrameId) {
             console.log("Canceling animation frame:", faWorkerRef.current.animationFrameId);
             cancelAnimationFrame(faWorkerRef.current.animationFrameId);
@@ -629,27 +536,22 @@ const CommunityAnalysis = ({ communityData }) => {
           faWorkerRef.current.stop();
           console.log("ForceAtlas2 worker stopped successfully");
           
-          // Don't set to null to allow restarting with the same worker
           setIsForceAtlas2Running(false);
         } else {
           console.warn("No ForceAtlas2 worker found to stop");
         }
       } catch (e) {
         console.error("Error stopping ForceAtlas2:", e);
-        // Still set running to false in case of error
         setIsForceAtlas2Running(false);
       }
     } else {
-      // Start the layout if it's not running
       console.log("Starting ForceAtlas2");
       try {
-        // Double check renderer and graph again
         if (!rendererRef.current || !graphRef.current) {
           console.error("Cannot start ForceAtlas2: renderer or graph missing");
           return;
         }
         
-        // Create a new worker if it doesn't exist
         if (!faWorkerRef.current) {
           console.log("Creating new ForceAtlas2 worker");
           
@@ -666,24 +568,20 @@ const CommunityAnalysis = ({ communityData }) => {
             barnesHutTheta: 0.5,
           };
           
-          // Create worker directly instead of using a factory function
           try {
             faWorkerRef.current = new FA2Layout(graphRef.current, {
               settings: settings,
               getEdgeWeight: 'weight'
             });
             
-            // Set up animation loop for layout
             let animationFrameId = null;
             
             const refreshFrame = () => {
               if (!rendererRef.current || !faWorkerRef.current) return;
               
               try {
-                // Only refresh if the renderer exists
                 rendererRef.current.refresh();
                 
-                // Continue the animation if layout is still running
                 if (faWorkerRef.current && faWorkerRef.current.isRunning()) {
                   animationFrameId = requestAnimationFrame(refreshFrame);
                   faWorkerRef.current.animationFrameId = animationFrameId;
@@ -694,18 +592,14 @@ const CommunityAnalysis = ({ communityData }) => {
               }
             };
             
-            // Set to running state BEFORE starting the layout to prevent cleanup
             setIsForceAtlas2Running(true);
             
-            // Start the worker after state update
             setTimeout(() => {
               if (faWorkerRef.current) {
                 console.log("Starting ForceAtlas2 layout with delay");
                 faWorkerRef.current.start();
-                // Start animation loop
                 animationFrameId = requestAnimationFrame(refreshFrame);
-                
-                // Store animation frame ID for cleanup
+
                 faWorkerRef.current.animationFrameId = animationFrameId;
               }
             }, 100);
@@ -717,23 +611,18 @@ const CommunityAnalysis = ({ communityData }) => {
         } else {
           console.log("Using existing ForceAtlas2 worker");
           
-          // Set to running state BEFORE starting the layout to prevent cleanup
           setIsForceAtlas2Running(true);
           
-          // If worker exists, just start it (with small delay to ensure state is updated)
           setTimeout(() => {
             if (faWorkerRef.current) {
               faWorkerRef.current.start();
               
-              // Set up animation loop for existing worker
               const refreshFrame = () => {
                 if (!rendererRef.current || !faWorkerRef.current) return;
                 
                 try {
-                  // Only refresh if the renderer exists
                   rendererRef.current.refresh();
                   
-                  // Continue the animation if layout is still running
                   if (faWorkerRef.current && faWorkerRef.current.isRunning()) {
                     const newAnimationId = requestAnimationFrame(refreshFrame);
                     faWorkerRef.current.animationFrameId = newAnimationId;
@@ -746,7 +635,6 @@ const CommunityAnalysis = ({ communityData }) => {
                 }
               };
               
-              // Start animation loop
               faWorkerRef.current.animationFrameId = requestAnimationFrame(refreshFrame);
             }
           }, 100);
@@ -757,14 +645,12 @@ const CommunityAnalysis = ({ communityData }) => {
       }
     }
     
-    // Reset transition flag after delay to allow state updates
     setTimeout(() => {
       layoutTransitionRef.current = false;
       console.log("Layout transition flag reset");
-    }, 1000); // Increased timeout to ensure all operations complete
+    }, 1000);
   };
 
-  // Add download current visualization function
   const handleDownloadCurrentVisualization = useCallback(() => {
     if (!rendererRef.current || !containerRef.current || !sigmaRef.current) {
       console.error("Cannot download visualization: Renderer, container, or sigma ref not available");
@@ -772,22 +658,16 @@ const CommunityAnalysis = ({ communityData }) => {
     }
 
     try {
-      // Try to use the direct Sigma method if available (ideal solution)
       let downloadSuccessful = false;
       
-      // Try to access the Sigma renderer 
-      // Different versions of Sigma have different APIs
       if (typeof rendererRef.current.refresh === 'function') {
-        // Make sure the visualization is up to date
         rendererRef.current.refresh();
-        
-        // Try to access snapshot method
+
         const canvasRenderer = rendererRef.current.getCanvasRenderer?.() || 
                                rendererRef.current.getRenderer?.();
                                
         if (canvasRenderer && typeof canvasRenderer.snapshot === 'function') {
           console.log("Using Sigma's built-in snapshot method");
-          // Sigma v2 provides a snapshot method to get the rendered graph
           const snapshot = canvasRenderer.snapshot({
             download: true,
             filename: 'community_visualization.png',
@@ -799,11 +679,9 @@ const CommunityAnalysis = ({ communityData }) => {
         }
       }
       
-      // If the direct method failed, use our canvas-based approach
       if (!downloadSuccessful) {
         console.log("Falling back to manual canvas capture method");
-        
-        // Get references to both container and Sigma container
+
         const container = containerRef.current;
         const sigmaContainer = sigmaRef.current;
         
@@ -812,7 +690,6 @@ const CommunityAnalysis = ({ communityData }) => {
           return;
         }
         
-        // Get all canvases in the Sigma container
         const canvases = sigmaContainer.querySelectorAll('canvas');
         
         if (!canvases || canvases.length === 0) {
@@ -820,30 +697,24 @@ const CommunityAnalysis = ({ communityData }) => {
           return;
         }
         
-        // Get the container dimensions
         const containerRect = container.getBoundingClientRect();
         const width = containerRect.width;
         const height = containerRect.height;
         
         console.log(`Container dimensions: ${width}x${height}, Found ${canvases.length} canvases`);
         
-        // Create a new canvas for the final image
         const outputCanvas = document.createElement('canvas');
         outputCanvas.width = width;
         outputCanvas.height = height;
         const outputCtx = outputCanvas.getContext('2d');
         
-        // Fill with a white background
         outputCtx.fillStyle = 'white';
         outputCtx.fillRect(0, 0, width, height);
         
-        // Draw each canvas in order
         console.log(`Drawing ${canvases.length} canvases to output`);
         Array.from(canvases).forEach((canvas, index) => {
           try {
-            // Check if the canvas is empty or has content
             if (canvas.width > 0 && canvas.height > 0) {
-              // Draw maintaining the aspect ratio
               outputCtx.drawImage(canvas, 0, 0, width, height);
               console.log(`Canvas ${index} drawn successfully`);
             } else {
@@ -854,7 +725,6 @@ const CommunityAnalysis = ({ communityData }) => {
           }
         });
         
-        // Create a download link
         const link = document.createElement('a');
         link.download = 'community_visualization.png';
         link.href = outputCanvas.toDataURL('image/png');
@@ -865,7 +735,6 @@ const CommunityAnalysis = ({ communityData }) => {
         console.log("Visualization downloaded successfully via manual method");
       }
       
-      // Show success feedback
       setDownloadSuccess(true);
       setTimeout(() => {
         setDownloadSuccess(false);
@@ -876,20 +745,49 @@ const CommunityAnalysis = ({ communityData }) => {
     }
   }, [containerRef, sigmaRef, rendererRef]);
 
-  // Add handleCenterView function
-  const handleCenterView = useCallback(() => {
-    if (rendererRef.current) {
-      try {
-        console.log("Centering the view");
-        // Reset the camera to show the entire graph
-        rendererRef.current.getCamera().animatedReset();
-        rendererRef.current.refresh();
-      } catch (e) {
-        console.error("Error centering view:", e);
-      }
-    }
-  }, [rendererRef]);
+  const getModularityColor = (value) => {
+    if (value >= 0.7) return 'success';
+    if (value >= 0.4) return 'info';
+    if (value >= 0.2) return 'warning';
+    return 'error';
+  };
 
+  const getModularityTooltip = (value) => {
+    if (value >= 0.7) return 'Very strong community structure';
+    if (value >= 0.4) return 'Strong community structure';
+    if (value >= 0.2) return 'Moderate community structure';
+    return 'Weak community structure';
+  };
+
+  const getModularityInterpretation = (value) => {
+    if (value >= 0.7) {
+      return `This network has a very strong community structure (modularity: ${value.toFixed(3)}). The communities are clearly defined and well separated from each other.`;
+    } else if (value >= 0.4) {
+      return `This network has a strong community structure (modularity: ${value.toFixed(3)}). The communities are well defined with relatively few connections between different communities.`;
+    } else if (value >= 0.2) {
+      return `This network has a moderate community structure (modularity: ${value.toFixed(3)}). The communities can be identified but have significant connections between them.`;
+    } else {
+      return `This network has a weak community structure (modularity: ${value.toFixed(3)}). The communities are not well defined and have many connections between them.`;
+    }
+  };
+
+  if (isLoading || !hasValidData) {
+    return (
+      <Paper sx={{ p: 4, borderRadius: 2, boxShadow: 3 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flexDirection: 'column', p: 4 }}>
+          <CircularProgress size={40} />
+          <Typography variant="h6" sx={{ mt: 2 }}>
+            Loading community data...
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1, textAlign: 'center' }}>
+            Community detection and visualization is being processed in the background.
+            This may take a moment for larger networks.
+          </Typography>
+        </Box>
+      </Paper>
+    );
+  }
+  
   return (
     <Paper sx={{ p: 4, borderRadius: 2, boxShadow: 3 }}>
       <style>{sigmaCanvasStyle}</style>
@@ -914,7 +812,6 @@ const CommunityAnalysis = ({ communityData }) => {
       <Divider sx={{ mb: 3 }} />
       
       <Grid container spacing={4} direction="column">
-        {/* Bar chart - Full Width */}
         <Grid item xs={12}>
           <Card sx={{ minHeight: 400 }}>
             <CardContent>
@@ -965,7 +862,6 @@ const CommunityAnalysis = ({ communityData }) => {
           </Card>
         </Grid>
         
-        {/* Interactive Graph - Full Width */}
         {graph_data && (
         <Grid item xs={12}>
             <Card sx={{ minHeight: 650 }}>
@@ -974,7 +870,6 @@ const CommunityAnalysis = ({ communityData }) => {
                   Interactive Community Visualization
                 </Typography>
                 
-                {/* Control panel moved below the title */}
                 <Box sx={{ 
                   display: 'flex', 
                   flexWrap: 'wrap', 
@@ -1128,7 +1023,6 @@ const CommunityAnalysis = ({ communityData }) => {
           </Grid>
           )}
         
-        {/* Add modularity interpretation */}
         <Grid item xs={12}>
           <Box sx={{ 
             p: 2, 

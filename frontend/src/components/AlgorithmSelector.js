@@ -34,7 +34,9 @@ import {
   CloudUpload,
   Info as InfoIcon,
   ExpandMore as ExpandMoreIcon,
-  Settings as SettingsIcon
+  Settings as SettingsIcon,
+  Timeline,
+  Assessment
 } from '@mui/icons-material';
 
 const AlgorithmSelector = ({ graphData, onAnalysis, onUpload }) => {
@@ -78,7 +80,6 @@ const AlgorithmSelector = ({ graphData, onAnalysis, onUpload }) => {
     }
   };
   
-  // Algorithm parameter states
   const [alpha, setAlpha] = useState(algorithmInfo.rombach.params.alpha);
   const [beta, setBeta] = useState(algorithmInfo.rombach.params.beta);
   const [numRuns, setNumRuns] = useState(algorithmInfo.rombach.params.num_runs);
@@ -87,7 +88,6 @@ const AlgorithmSelector = ({ graphData, onAnalysis, onUpload }) => {
     setSelectedAlgorithm(algorithm);
     setError(null);
     
-    // Reset parameters to algorithm defaults
     const defaultParams = algorithmInfo[algorithm].params;
     if (defaultParams.alpha !== undefined) setAlpha(defaultParams.alpha);
     if (defaultParams.beta !== undefined) setBeta(defaultParams.beta);
@@ -114,7 +114,6 @@ const AlgorithmSelector = ({ graphData, onAnalysis, onUpload }) => {
       return;
     }
 
-    // Validate parameters before submission
     let validationError = null;
     
     if (selectedAlgorithm === 'rombach') {
@@ -144,13 +143,10 @@ const AlgorithmSelector = ({ graphData, onAnalysis, onUpload }) => {
     setError(null);
 
     try {
-      // Create a FormData object to send the file and algorithm parameters
       const formData = new FormData();
       formData.append('file', file);
       formData.append('algorithm', selectedAlgorithm);
       
-      // Add algorithm-specific parameters with current user values
-      // Ensure all numeric values are properly formatted
       if (selectedAlgorithm === 'rombach') {
         formData.append('alpha', Number(alpha));
         formData.append('beta', Number(beta));
@@ -161,7 +157,6 @@ const AlgorithmSelector = ({ graphData, onAnalysis, onUpload }) => {
         formData.append('beta', Number(beta));
       }
       
-      // Add centrality calculation options
       formData.append('calculate_closeness', calculateCloseness);
       formData.append('calculate_betweenness', calculateBetweenness);
 
@@ -172,7 +167,6 @@ const AlgorithmSelector = ({ graphData, onAnalysis, onUpload }) => {
         ...(selectedAlgorithm === 'cucuringu' ? { beta } : {})
       });
 
-      // Send the request to the backend
       const response = await fetch('http://localhost:8080/analyze', {
         method: 'POST',
         body: formData,
@@ -183,7 +177,6 @@ const AlgorithmSelector = ({ graphData, onAnalysis, onUpload }) => {
         throw new Error(errorData.detail || errorData.error || 'Analysis failed');
       }
 
-      // Immediately trigger navigation with placeholder data
       if (onUpload) {
         onUpload({
           filename: file.name,
@@ -192,7 +185,6 @@ const AlgorithmSelector = ({ graphData, onAnalysis, onUpload }) => {
         });
       }
       
-      // Provide minimal placeholder data to trigger immediate navigation
       onAnalysis({
         graph_data: { nodes: [], edges: [] },
         network_metrics: {},
@@ -202,11 +194,9 @@ const AlgorithmSelector = ({ graphData, onAnalysis, onUpload }) => {
         image_file: null
       });
       
-      // Continue processing the actual data in the background
       const data = await response.json();
       console.log('Analysis response:', data);
       
-      // Pass the complete analysis results to the parent component
       onAnalysis(data);
       setSuccess(true);
     } catch (err) {
@@ -217,7 +207,6 @@ const AlgorithmSelector = ({ graphData, onAnalysis, onUpload }) => {
     }
   };
 
-  // Helper functions for parameter descriptions
   const getParameterDescription = (key) => {
     const descriptions = {
       'alpha': 'Controls the sharpness of the core-periphery boundary. Higher values create a more defined boundary.',
@@ -343,7 +332,6 @@ const AlgorithmSelector = ({ graphData, onAnalysis, onUpload }) => {
           ))}
         </Grid>
 
-        {/* Algorithm Parameters Section */}
         <Accordion 
           expanded={true}
           sx={{ 
@@ -370,97 +358,178 @@ const AlgorithmSelector = ({ graphData, onAnalysis, onUpload }) => {
             </Typography>
             
             <Grid container spacing={3}>
-              {/* Rombach Algorithm Parameters */}
               {selectedAlgorithm === 'rombach' && (
                 <>
-                  {/* Alpha Parameter */}
                   <Grid item xs={12} md={4}>
-                    <Paper sx={{ p: 2, borderRadius: 2 }}>
-                      <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1 }}>
+                    <Box sx={{ 
+                      p: 3, 
+                      bgcolor: 'rgba(233, 30, 99, 0.05)', 
+                      borderRadius: 2,
+                      border: '1px solid rgba(233, 30, 99, 0.1)'
+                    }}>
+                      <Typography variant="h6" sx={{ 
+                        color: '#e91e63', 
+                        mb: 2,
+                        display: 'flex',
+                        alignItems: 'center'
+                      }}>
+                        <SettingsIcon sx={{ fontSize: 20, mr: 1 }} />
                         Alpha (α)
                       </Typography>
-                      <Typography variant="body2" sx={{ mb: 2, color: 'text.secondary' }}>
-                        {getParameterDescription('alpha')}
+                      
+                      <Typography variant="body2" sx={{ mb: 3 }}>
+                        Controls the sharpness of the core-periphery boundary. Higher values create a more defined boundary.
                       </Typography>
-                      <Box sx={{ px: 1 }}>
+                      
+                      <Box sx={{ mb: 3 }}>
                         <Slider
                           value={alpha}
                           onChange={(e, newValue) => setAlpha(newValue)}
                           min={0}
                           max={1}
-                          step={0.05}
+                          step={0.1}
                           marks={[
                             { value: 0, label: '0' },
                             { value: 0.5, label: '0.5' },
                             { value: 1, label: '1' }
                           ]}
-                          valueLabelDisplay="auto"
+                          sx={{
+                            color: '#e91e63',
+                            '& .MuiSlider-thumb': {
+                              width: 24,
+                              height: 24,
+                              backgroundColor: '#fff',
+                              border: '2px solid #e91e63',
+                              '&:focus, &:hover, &.Mui-active': {
+                                boxShadow: '0 0 0 8px rgba(233, 30, 99, 0.16)',
+                              },
+                            },
+                            '& .MuiSlider-valueLabel': {
+                              backgroundColor: '#e91e63',
+                            },
+                          }}
                         />
                       </Box>
-                      <Box sx={{ mt: 2 }}>
-                        <TextField 
-                          label="Alpha Value"
-                          type="number"
-                          value={alpha}
-                          onChange={(e) => setAlpha(parseFloat(e.target.value))}
-                          inputProps={{ min: 0, max: 1, step: 0.05 }}
-                          variant="outlined"
-                          size="small"
-                          fullWidth
-                        />
-                      </Box>
-                    </Paper>
+                      
+                      <TextField 
+                        label="Alpha Value"
+                        type="number"
+                        value={alpha}
+                        onChange={(e) => setAlpha(parseFloat(e.target.value))}
+                        inputProps={{ min: 0, max: 1, step: 0.1 }}
+                        variant="outlined"
+                        size="small"
+                        fullWidth
+                        sx={{
+                          '& .MuiOutlinedInput-root': {
+                            '&.Mui-focused fieldset': {
+                              borderColor: '#e91e63',
+                            },
+                          },
+                          '& .MuiInputLabel-root.Mui-focused': {
+                            color: '#e91e63',
+                          }
+                        }}
+                      />
+                    </Box>
                   </Grid>
                   
-                  {/* Beta Parameter */}
                   <Grid item xs={12} md={4}>
-                    <Paper sx={{ p: 2, borderRadius: 2 }}>
-                      <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1 }}>
+                    <Box sx={{ 
+                      p: 3, 
+                      bgcolor: 'rgba(156, 39, 176, 0.05)', 
+                      borderRadius: 2, 
+                      border: '1px solid rgba(156, 39, 176, 0.1)'
+                    }}>
+                      <Typography variant="h6" sx={{ 
+                        color: '#9c27b0', 
+                        mb: 2,
+                        display: 'flex',
+                        alignItems: 'center'
+                      }}>
+                        <Timeline sx={{ fontSize: 20, mr: 1 }} />
                         Beta (β)
                       </Typography>
-                      <Typography variant="body2" sx={{ mb: 2, color: 'text.secondary' }}>
-                        {getParameterDescription('beta')}
+                      
+                      <Typography variant="body2" sx={{ mb: 3 }}>
+                        Controls the fraction of peripheral nodes in the network partitioning.
                       </Typography>
-                      <Box sx={{ px: 1 }}>
+                      
+                      <Box sx={{ mb: 3 }}>
                         <Slider
                           value={beta}
                           onChange={(e, newValue) => setBeta(newValue)}
                           min={0}
                           max={1}
-                          step={0.05}
+                          step={0.1}
                           marks={[
                             { value: 0, label: '0' },
                             { value: 0.5, label: '0.5' },
                             { value: 1, label: '1' }
                           ]}
-                          valueLabelDisplay="auto"
+                          sx={{
+                            color: '#9c27b0',
+                            '& .MuiSlider-thumb': {
+                              width: 24,
+                              height: 24,
+                              backgroundColor: '#fff',
+                              border: '2px solid #9c27b0',
+                              '&:focus, &:hover, &.Mui-active': {
+                                boxShadow: '0 0 0 8px rgba(156, 39, 176, 0.16)',
+                              },
+                            },
+                            '& .MuiSlider-valueLabel': {
+                              backgroundColor: '#9c27b0',
+                            },
+                          }}
                         />
                       </Box>
-                      <Box sx={{ mt: 2 }}>
-                        <TextField 
-                          label="Beta Value"
-                          type="number"
-                          value={beta}
-                          onChange={(e) => setBeta(parseFloat(e.target.value))}
-                          inputProps={{ min: 0, max: 1, step: 0.05 }}
-                          variant="outlined"
-                          size="small"
-                          fullWidth
-                        />
-                      </Box>
-                    </Paper>
+                      
+                      <TextField 
+                        label="Beta Value"
+                        type="number"
+                        value={beta}
+                        onChange={(e) => setBeta(parseFloat(e.target.value))}
+                        inputProps={{ min: 0, max: 1, step: 0.1 }}
+                        variant="outlined"
+                        size="small"
+                        fullWidth
+                        sx={{
+                          '& .MuiOutlinedInput-root': {
+                            '&.Mui-focused fieldset': {
+                              borderColor: '#9c27b0',
+                            },
+                          },
+                          '& .MuiInputLabel-root.Mui-focused': {
+                            color: '#9c27b0',
+                          }
+                        }}
+                      />
+                    </Box>
                   </Grid>
                   
-                  {/* Number of Runs Parameter */}
                   <Grid item xs={12} md={4}>
-                    <Paper sx={{ p: 2, borderRadius: 2 }}>
-                      <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1 }}>
+                    <Box sx={{ 
+                      p: 3, 
+                      bgcolor: 'rgba(33, 150, 243, 0.05)', 
+                      borderRadius: 2,
+                      border: '1px solid rgba(33, 150, 243, 0.1)'
+                    }}>
+                      <Typography variant="h6" sx={{ 
+                        color: '#2196f3', 
+                        mb: 2,
+                        display: 'flex',
+                        alignItems: 'center'
+                      }}>
+                        <Assessment sx={{ fontSize: 20, mr: 1 }} />
                         Number of Runs
                       </Typography>
-                      <Typography variant="body2" sx={{ mb: 2, color: 'text.secondary' }}>
-                        {getParameterDescription('num_runs')}
+                      
+                      <Typography variant="body2" sx={{ mb: 3 }}>
+                        Number of independent algorithm runs with different initializations. Higher values improve result consistency.
                       </Typography>
-                      <Box sx={{ px: 1 }}>
+                      
+                      <Box sx={{ mb: 3 }}>
                         <Slider
                           value={numRuns}
                           onChange={(e, newValue) => setNumRuns(newValue)}
@@ -472,37 +541,72 @@ const AlgorithmSelector = ({ graphData, onAnalysis, onUpload }) => {
                             { value: 10, label: '10' },
                             { value: 20, label: '20' }
                           ]}
-                          valueLabelDisplay="auto"
+                          sx={{
+                            color: '#2196f3',
+                            '& .MuiSlider-thumb': {
+                              width: 24,
+                              height: 24,
+                              backgroundColor: '#fff',
+                              border: '2px solid #2196f3',
+                              '&:focus, &:hover, &.Mui-active': {
+                                boxShadow: '0 0 0 8px rgba(33, 150, 243, 0.16)',
+                              },
+                            },
+                            '& .MuiSlider-valueLabel': {
+                              backgroundColor: '#2196f3',
+                            },
+                          }}
                         />
                       </Box>
-                      <Box sx={{ mt: 2 }}>
-                        <TextField 
-                          label="Number of Runs"
-                          type="number"
-                          value={numRuns}
-                          onChange={(e) => setNumRuns(parseInt(e.target.value))}
-                          inputProps={{ min: 1, max: 50, step: 1 }}
-                          variant="outlined"
-                          size="small"
-                          fullWidth
-                        />
-                      </Box>
-                    </Paper>
+                      
+                      <TextField 
+                        label="Number of Runs"
+                        type="number"
+                        value={numRuns}
+                        onChange={(e) => setNumRuns(parseInt(e.target.value))}
+                        inputProps={{ min: 1, max: 50, step: 1 }}
+                        variant="outlined"
+                        size="small"
+                        fullWidth
+                        sx={{
+                          '& .MuiOutlinedInput-root': {
+                            '&.Mui-focused fieldset': {
+                              borderColor: '#2196f3',
+                            },
+                          },
+                          '& .MuiInputLabel-root.Mui-focused': {
+                            color: '#2196f3',
+                          }
+                        }}
+                      />
+                    </Box>
                   </Grid>
                 </>
               )}
               
-              {/* BE Algorithm Parameters */}
               {selectedAlgorithm === 'be' && (
-                <Grid item xs={12} md={6}>
-                  <Paper sx={{ p: 2, borderRadius: 2 }}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1 }}>
+                <Grid item xs={12} md={6} sx={{ mx: 'auto' }}>
+                  <Box sx={{ 
+                    p: 3, 
+                    bgcolor: 'rgba(33, 150, 243, 0.05)', 
+                    borderRadius: 2,
+                    border: '1px solid rgba(33, 150, 243, 0.1)'
+                  }}>
+                    <Typography variant="h6" sx={{ 
+                      color: '#2196f3', 
+                      mb: 2,
+                      display: 'flex',
+                      alignItems: 'center'
+                    }}>
+                      <Assessment sx={{ fontSize: 20, mr: 1 }} />
                       Number of Runs
                     </Typography>
-                    <Typography variant="body2" sx={{ mb: 2, color: 'text.secondary' }}>
-                      {getParameterDescription('num_runs')}
+                    
+                    <Typography variant="body2" sx={{ mb: 3 }}>
+                      Number of independent algorithm runs with different initializations. Higher values improve result consistency.
                     </Typography>
-                    <Box sx={{ px: 1 }}>
+                    
+                    <Box sx={{ mb: 3 }}>
                       <Slider
                         value={numRuns}
                         onChange={(e, newValue) => setNumRuns(newValue)}
@@ -514,36 +618,71 @@ const AlgorithmSelector = ({ graphData, onAnalysis, onUpload }) => {
                           { value: 10, label: '10' },
                           { value: 20, label: '20' }
                         ]}
-                        valueLabelDisplay="auto"
+                        sx={{
+                          color: '#2196f3',
+                          '& .MuiSlider-thumb': {
+                            width: 24,
+                            height: 24,
+                            backgroundColor: '#fff',
+                            border: '2px solid #2196f3',
+                            '&:focus, &:hover, &.Mui-active': {
+                              boxShadow: '0 0 0 8px rgba(33, 150, 243, 0.16)',
+                            },
+                          },
+                          '& .MuiSlider-valueLabel': {
+                            backgroundColor: '#2196f3',
+                          },
+                        }}
                       />
                     </Box>
-                    <Box sx={{ mt: 2 }}>
-                      <TextField 
-                        label="Number of Runs"
-                        type="number"
-                        value={numRuns}
-                        onChange={(e) => setNumRuns(parseInt(e.target.value))}
-                        inputProps={{ min: 1, max: 50, step: 1 }}
-                        variant="outlined"
-                        size="small"
-                        fullWidth
-                      />
-                    </Box>
-                  </Paper>
+                    
+                    <TextField 
+                      label="Number of Runs"
+                      type="number"
+                      value={numRuns}
+                      onChange={(e) => setNumRuns(parseInt(e.target.value))}
+                      inputProps={{ min: 1, max: 50, step: 1 }}
+                      variant="outlined"
+                      size="small"
+                      fullWidth
+                      sx={{
+                        '& .MuiOutlinedInput-root': {
+                          '&.Mui-focused fieldset': {
+                            borderColor: '#2196f3',
+                          },
+                        },
+                        '& .MuiInputLabel-root.Mui-focused': {
+                          color: '#2196f3',
+                        }
+                      }}
+                    />
+                  </Box>
                 </Grid>
               )}
               
-              {/* Cucuringu Algorithm Parameters */}
               {selectedAlgorithm === 'cucuringu' && (
-                <Grid item xs={12} md={6}>
-                  <Paper sx={{ p: 2, borderRadius: 2 }}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1 }}>
+                <Grid item xs={12} md={6} sx={{ mx: 'auto' }}>
+                  <Box sx={{ 
+                    p: 3, 
+                    bgcolor: 'rgba(156, 39, 176, 0.05)', 
+                    borderRadius: 2,
+                    border: '1px solid rgba(156, 39, 176, 0.1)'
+                  }}>
+                    <Typography variant="h6" sx={{ 
+                      color: '#9c27b0', 
+                      mb: 2,
+                      display: 'flex',
+                      alignItems: 'center'
+                    }}>
+                      <Timeline sx={{ fontSize: 20, mr: 1 }} />
                       Beta (β)
                     </Typography>
-                    <Typography variant="body2" sx={{ mb: 2, color: 'text.secondary' }}>
-                      {getParameterDescription('beta')}
+                    
+                    <Typography variant="body2" sx={{ mb: 3 }}>
+                      Controls the minimum boundary size for core detection, affecting how the algorithm partitions the network.
                     </Typography>
-                    <Box sx={{ px: 1 }}>
+                    
+                    <Box sx={{ mb: 3 }}>
                       <Slider
                         value={beta}
                         onChange={(e, newValue) => setBeta(newValue)}
@@ -555,22 +694,45 @@ const AlgorithmSelector = ({ graphData, onAnalysis, onUpload }) => {
                           { value: 0.1, label: '0.1' },
                           { value: 0.5, label: '0.5' }
                         ]}
-                        valueLabelDisplay="auto"
+                        sx={{
+                          color: '#9c27b0',
+                          '& .MuiSlider-thumb': {
+                            width: 24,
+                            height: 24,
+                            backgroundColor: '#fff',
+                            border: '2px solid #9c27b0',
+                            '&:focus, &:hover, &.Mui-active': {
+                              boxShadow: '0 0 0 8px rgba(156, 39, 176, 0.16)',
+                            },
+                          },
+                          '& .MuiSlider-valueLabel': {
+                            backgroundColor: '#9c27b0',
+                          },
+                        }}
                       />
                     </Box>
-                    <Box sx={{ mt: 2 }}>
-                      <TextField 
-                        label="Beta Value"
-                        type="number"
-                        value={beta}
-                        onChange={(e) => setBeta(parseFloat(e.target.value))}
-                        inputProps={{ min: 0.01, max: 0.5, step: 0.01 }}
-                        variant="outlined"
-                        size="small"
-                        fullWidth
-                      />
-                    </Box>
-                  </Paper>
+                    
+                    <TextField 
+                      label="Beta Value"
+                      type="number"
+                      value={beta}
+                      onChange={(e) => setBeta(parseFloat(e.target.value))}
+                      inputProps={{ min: 0.01, max: 0.5, step: 0.01 }}
+                      variant="outlined"
+                      size="small"
+                      fullWidth
+                      sx={{
+                        '& .MuiOutlinedInput-root': {
+                          '&.Mui-focused fieldset': {
+                            borderColor: '#9c27b0',
+                          },
+                        },
+                        '& .MuiInputLabel-root.Mui-focused': {
+                          color: '#9c27b0',
+                        }
+                      }}
+                    />
+                  </Box>
                 </Grid>
               )}
             </Grid>

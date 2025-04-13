@@ -1,7 +1,6 @@
 import React from 'react';
 import { Box, Typography, Paper, useTheme } from '@mui/material';
 
-// Component to display a single legend item with color indicator
 const LegendItem = ({ color, label }) => (
   <Box sx={{ display: 'flex', alignItems: 'center', mr: 3, mb: 1 }}>
     <Box 
@@ -36,7 +35,6 @@ const GraphLegend = () => {
       </Typography>
       
       <Box sx={{ display: 'flex', flexWrap: 'wrap' }}>
-        {/* Node Types */}
         <Box sx={{ minWidth: '200px', mb: 1 }}>
           <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
             Node Types:
@@ -47,7 +45,6 @@ const GraphLegend = () => {
           </Box>
         </Box>
         
-        {/* Edge Types */}
         <Box sx={{ minWidth: '250px' }}>
           <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
             Edge Types:

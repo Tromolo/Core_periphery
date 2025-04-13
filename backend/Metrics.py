@@ -158,10 +158,14 @@ def calculate_all_network_metrics(graph: nx.Graph, classifications: Dict, corene
             }
         }
         
-        # Calculate coreness Q value only once and reuse it
         if any(algorithm == alg for alg in ["rombach", "cucuringu", "be"]):
-            coreness_values = [v for v in coreness.values() if isinstance(v, (int, float))]
-            Q = sum(coreness_values) / max(1, len(coreness_values)) if coreness_values else 0
+            if algorithm_params and 'final_score' in algorithm_params:
+                Q = algorithm_params.get('final_score')
+                print(f"Using algorithm final_score: {Q}")
+            else:
+                coreness_values = [v for v in coreness.values() if isinstance(v, (int, float))]
+                Q = sum(coreness_values) / max(1, len(coreness_values)) if coreness_values else 0
+                print(f"Calculated Q value from coreness values: {Q}")
             
             if algorithm == "rombach":
                 metrics["rombach_params"] = {
@@ -240,7 +244,7 @@ def prepare_community_analysis_data(graph):
             graph_data["edges"].append({
                 "source": str(source),
                 "target": str(target),
-                "weight": 1  # Default weight
+                "weight": 1
             })
         
         return {

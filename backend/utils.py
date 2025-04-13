@@ -44,7 +44,6 @@ def set_node_colors(c, x, cmap, colored_nodes):
     cnt = Counter([c[d] for d in colored_nodes])
     num_groups = len(cnt)
 
-    # Set up the palette
     if cmap is None:
         if num_groups <= 10:
             cmap = sns.color_palette().as_hex()
@@ -53,7 +52,6 @@ def set_node_colors(c, x, cmap, colored_nodes):
         else:
             cmap = sns.color_palette("hls", num_groups).as_hex()
 
-    # Calc size of groups
     cmap = dict(
         zip(
             [d[0] for d in cnt.most_common(num_groups)],
@@ -63,7 +61,6 @@ def set_node_colors(c, x, cmap, colored_nodes):
     bounds = np.linspace(0, 1, 11)
     norm = mpl.colors.BoundaryNorm(bounds, ncolors=12, extend="both")
 
-    # Calculate the color for each node using the palette
     cmap_coreness = {
         k: sns.light_palette(v, n_colors=12).as_hex() for k, v in cmap.items()
     }
@@ -81,7 +78,6 @@ def classify_nodes(G, c, x, max_num=None):
     non_residuals = [d for d in G.nodes() if (c[d] is not None) and (x[d] is not None)]
     residuals = [d for d in G.nodes() if (c[d] is None) or (x[d] is None)]
 
-    # Count the number of groups
     cnt = Counter([c[d] for d in non_residuals])
     cvals = np.array([d[0] for d in cnt.most_common(len(cnt))])
 
@@ -90,11 +86,9 @@ def classify_nodes(G, c, x, max_num=None):
     else:
         cvals = set(cvals)
 
-    #
     colored_nodes = [d for d in non_residuals if c[d] in cvals]
     muted = [d for d in non_residuals if not c[d] in cvals]
 
-    # Bring core nodes to front
     order = np.argsort([x[d] for d in colored_nodes])
     colored_nodes = [colored_nodes[d] for d in order]
 
@@ -159,16 +153,14 @@ def draw(
 
     c = {node: c.get(node, default_c) for node in G.nodes()}
     x = {node: x.get(node, default_x) for node in G.nodes()}"""
-    # Split node into residual and non-residual
+
     colored_nodes, muted_nodes, residuals = classify_nodes(G, c, x, max_group_num)
 
     node_colors, node_edge_colors = set_node_colors(c, x, cmap, colored_nodes)
 
-    # Set the position of nodes
     if pos is None:
         pos = calc_node_pos(G, layout_algorithm)
 
-    # Draw
     nodes = nx.draw_networkx_nodes(
         G,
         pos,
@@ -264,7 +256,6 @@ def draw_interactive(G, c, x, hover_text=None, node_size=10.0, pos=None, cmap=No
         print(f"Error type: {type(e)}")
         import traceback
         print(f"Traceback: {traceback.format_exc()}")
-        # Return a default empty figure structure instead of None
         return {
             'data': [],
             'layout': {
@@ -288,40 +279,33 @@ def save_visualization(graph, classifications, output_path, title=None):
     try:
         plt.figure(figsize=(10, 8))
         
-        # Get node positions
         pos = nx.spring_layout(graph, seed=42)
         
-        # Separate core and periphery nodes
         core_nodes = [node for node, cls in classifications.items() if cls == "C"]
         periphery_nodes = [node for node, cls in classifications.items() if cls == "P"]
         
-        # Draw core nodes
         nx.draw_networkx_nodes(graph, pos, 
                               nodelist=core_nodes,
                               node_color='red',
                               node_size=100,
                               alpha=0.8)
         
-        # Draw periphery nodes
         nx.draw_networkx_nodes(graph, pos, 
                               nodelist=periphery_nodes,
                               node_color='blue',
                               node_size=60,
                               alpha=0.6)
         
-        # Draw edges
         nx.draw_networkx_edges(graph, pos, alpha=0.3)
         
         if title:
             plt.title(title)
         plt.axis('off')
         
-        # Save the figure
         print(f"Debug - Saving visualization to: {output_path}")
         plt.savefig(output_path, dpi=300, bbox_inches='tight')
         print(f"Debug - Successfully saved visualization to: {output_path}")
         
-        # Verify file exists
         if os.path.exists(output_path):
             print(f"Debug - Confirmed file exists at: {output_path}")
         else:

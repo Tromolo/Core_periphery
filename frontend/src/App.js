@@ -20,7 +20,10 @@ import {
   CardActionArea,
   Divider,
   CardActions,
-  CircularProgress
+  CircularProgress,
+  FormGroup,
+  FormControlLabel,
+  Checkbox
 } from '@mui/material';
 import { 
   Home as HomeIcon, 
@@ -95,7 +98,13 @@ function App() {
   const [gdfFile, setGdfFile] = useState(null);
   const [tabValue, setTabValue] = useState(0);
   
-  // Create a constant for the initial networkMetrics state
+  const [selectedAnalyses, setSelectedAnalyses] = useState({
+    networkStats: true,
+    degreeDistribution: true,
+    connectedComponents: true,
+    communityAnalysis: true,
+  });
+
   const initialNetworkMetricsState = {
     updateStats: (stats) => {
       setNetworkMetrics(prevMetrics => ({
@@ -117,7 +126,6 @@ function App() {
     setNodeCsvFile(null);
     setEdgeCsvFile(null);
     setGdfFile(null);
-    // Reset networkMetrics to its initial state instead of null
     setNetworkMetrics(initialNetworkMetricsState);
     setCommunityData(null);
     setTabValue(0);
@@ -126,23 +134,27 @@ function App() {
   const handleGraphUpload = (data) => {
     console.log('Graph uploaded:', data);
     setGraphData(data);
+    setTabValue(0);
   };
 
   const handleBasicNetworkUpload = (data) => {
+    if (data.error) {
+      console.error('Error uploading graph:', data.error);
+      return;
+    }
+    
     setGraphData(data.graph_data);
     setCommunityData(data.community_data);
-    setFileInfo(data);
+    setFileInfo({...data, loading: data.loading});
     
-    // Make sure to safely merge the new metrics with the updateStats function
     setNetworkMetrics(prevMetrics => ({
       ...data.network_metrics,
-      updateStats: prevMetrics.updateStats
+      updateStats: prevMetrics.updateStats,
+      loading: data.loading
     }));
     
-    // Immediately navigate to the basic view after receiving data
     navigateTo('basic');
     
-    // Set the tab value
     setTabValue(0);
   };
 
@@ -153,7 +165,6 @@ function App() {
     setEdgeCsvFile(data.edge_csv_file);
     setGdfFile(data.gdf_file);
     
-    // Make sure to safely merge the new metrics with the updateStats function
     setNetworkMetrics(prevMetrics => ({
       ...data.network_metrics,
       updateStats: prevMetrics.updateStats
@@ -164,6 +175,13 @@ function App() {
 
   const handleTabChange = (event, newValue) => {
     setTabValue(newValue);
+  };
+
+  const handleAnalysisSelectionChange = (event) => {
+    setSelectedAnalyses({
+      ...selectedAnalyses,
+      [event.target.name]: event.target.checked,
+    });
   };
 
   const renderHomeView = () => (
@@ -222,10 +240,10 @@ function App() {
                 Features:
               </Typography>
               <ul>
-                <li>Network density and clustering</li>
-                <li>Path length and diameter</li>
-                <li>Community detection</li>
+                <li>Network metrics</li>
+                <li>Degree distribution</li>
                 <li>Connected components analysis</li>
+                <li>Community detection</li>
               </ul>
             </CardContent>
             <CardActions sx={{ p: 3, pt: 0 }}>
@@ -334,9 +352,81 @@ function App() {
         </Button>
       </Box>
       
-      {!Object.keys(networkMetrics).length > 1 || !networkMetrics.node_count ? (
+      {!graphData ? (
         <Box>
-          <GraphUploader onUpload={handleBasicNetworkUpload} />
+          <GraphUploader 
+            onUpload={handleBasicNetworkUpload} 
+            selectedAnalyses={selectedAnalyses}
+          />
+          <Card sx={{ 
+            mt: 4, 
+            p: 4,
+            borderRadius: 2, 
+            backgroundColor: 'rgba(0, 0, 0, 0.02)'
+          }}>
+            <Typography 
+              variant="h6" 
+              sx={{ 
+                mb: 3,
+                fontWeight: 600,
+                color: 'primary.dark'
+              }}
+            >
+              Select Analyses to Perform:
+            </Typography>
+            <FormGroup>
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6}>
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={selectedAnalyses.networkStats}
+                        onChange={handleAnalysisSelectionChange}
+                        name="networkStats"
+                      />
+                    }
+                    label="Network Statistics"
+                  />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={selectedAnalyses.degreeDistribution}
+                        onChange={handleAnalysisSelectionChange}
+                        name="degreeDistribution"
+                      />
+                    }
+                    label="Degree Distribution"
+                  />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={selectedAnalyses.connectedComponents}
+                        onChange={handleAnalysisSelectionChange}
+                        name="connectedComponents"
+                      />
+                    }
+                    label="Connected Components"
+                  />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={selectedAnalyses.communityAnalysis}
+                        onChange={handleAnalysisSelectionChange}
+                        name="communityAnalysis"
+                      />
+                    }
+                    label="Community Analysis"
+                  />
+                </Grid>
+              </Grid>
+            </FormGroup>
+          </Card>
         </Box>
       ) : (
         <>
@@ -355,26 +445,19 @@ function App() {
 
           <Grid container spacing={4} sx={{ mb: 4 }}>
             <Grid item xs={12}>
-              {graphData && graphData.nodes && graphData.nodes.length > 0 ? (
+              {networkMetrics?.node_count && (
                 <GraphStats 
                   graphData={graphData} 
                   metrics={networkMetrics}
                   communityData={communityData}
                   networkMetrics={networkMetrics}
                 />
-              ) : (
-                <Box sx={{ p: 4, textAlign: 'center' }}>
-                  <CircularProgress />
-                  <Typography variant="h6" sx={{ mt: 2 }}>
-                    Loading network data...
-                  </Typography>
-                </Box>
               )}
             </Grid>
           </Grid>
 
-          {/* Add Degree Histogram */}
-          {graphData && graphData.nodes && graphData.nodes.length > 0 && (
+          {/* Conditionally render Degree Histogram */}
+          {graphData && graphData.nodes && graphData.nodes.length > 0 && networkMetrics?.degree_distribution && (
             <Box sx={{ mt: 4, mb: 4 }}>
               <DegreeHistogram 
                 graphData={graphData} 

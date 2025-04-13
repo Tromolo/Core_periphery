@@ -13,7 +13,7 @@ import {
   CloudUpload
 } from '@mui/icons-material';
 
-const GraphUploader = ({ onUpload }) => {
+const GraphUploader = ({ onUpload, selectedAnalyses }) => {
   const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -40,8 +40,28 @@ const GraphUploader = ({ onUpload }) => {
     const formData = new FormData();
     formData.append('file', file);
 
+    // Append selected analyses data
+    if (selectedAnalyses) {
+      formData.append('selectedAnalyses', JSON.stringify(selectedAnalyses));
+      console.log('Appending selected analyses:', selectedAnalyses);
+    }
+
     try {
-      console.log('Sending upload request...');
+      console.log('Sending upload request to /upload_graph...');
+      
+      onUpload({
+        graph_data: { nodes: [], edges: [] },
+        community_data: { 
+          num_communities: 0,
+          graph_data: { nodes: [], edges: [] }
+        },
+        network_metrics: {},
+        filename: file.name, 
+        filesize: file.size,
+        filetype: file.type,
+        loading: true
+      });
+      
       const response = await fetch('http://localhost:8080/upload_graph', {
         method: 'POST',
         body: formData,
@@ -51,33 +71,25 @@ const GraphUploader = ({ onUpload }) => {
         const errorData = await response.json();
         throw new Error(errorData.detail || 'Upload failed');
       }
-
-      // First immediately trigger navigation with a minimal object
-      // This will cause immediate redirection before processing the response
-      onUpload({
-        graph_data: { nodes: [], edges: [] },
-        community_data: { num_communities: 0 },
-        network_metrics: {},
-        filename: file.name, 
-        filesize: file.size,
-        filetype: file.type
-      });
       
-      // Then continue with data processing in the background
       const data = await response.json();
       console.log('Upload response:', data);
       
-      // Add file information to the data
       data.filename = file.name;
       data.filesize = file.size;
       data.filetype = file.type;
+      data.loading = false;
       
-      // Update with the real data
       onUpload(data);
       setSuccess(true);
     } catch (err) {
       console.error('Upload error:', err);
       setError(err.message || 'Failed to upload file. Please try again.');
+      
+      onUpload({
+        error: err.message || 'Failed to upload file. Please try again.',
+        loading: false
+      });
     } finally {
       setLoading(false);
     }
@@ -180,7 +192,7 @@ const GraphUploader = ({ onUpload }) => {
             Upload your network graph file to analyze basic network metrics, community structure, and connected components.
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-            Supported formats: CSV, TXT, GML, GraphML, GEXF, Edgelist, Pajek
+            Supported formats: CSV, TXT, GML, GEXF, Edgelist,
           </Typography>
         </Box>
       </Card>

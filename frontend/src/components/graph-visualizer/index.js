@@ -10,7 +10,6 @@ import EdgeDistribution from './EdgeDistribution';
 import ConnectionPieChart from './ConnectionPieChart';
 
 const GraphVisualizer = ({ graphData, metrics, nodeCsvFile, edgeCsvFile, gdfFile }) => {
-  // State
   const [apiDataLoaded, setApiDataLoaded] = useState(false);
   const [graphRendering, setGraphRendering] = useState(true);
   const [error, setError] = useState(null);
@@ -23,10 +22,8 @@ const GraphVisualizer = ({ graphData, metrics, nodeCsvFile, edgeCsvFile, gdfFile
   const [isLargeGraph, setIsLargeGraph] = useState(false);
   const [rendererReady, setRendererReady] = useState(false);
   
-  // Refs
   const sigmaRendererRef = useRef(null);
   
-  // Debug renderer ready state
   useEffect(() => {
     console.log("Renderer ready state changed:", rendererReady);
     if (rendererReady) {
@@ -34,7 +31,6 @@ const GraphVisualizer = ({ graphData, metrics, nodeCsvFile, edgeCsvFile, gdfFile
     }
   }, [rendererReady]);
 
-  // Set API data as loaded when graph data is available
   useEffect(() => {
     let mounted = true;
     
@@ -42,7 +38,6 @@ const GraphVisualizer = ({ graphData, metrics, nodeCsvFile, edgeCsvFile, gdfFile
       if (mounted) {
         setApiDataLoaded(true);
         
-        // Check if it's a large graph
         const isLarge = graphData.nodes.length > 1000 || graphData.edges.length > 3000;
         setIsLargeGraph(isLarge);
       }
@@ -53,12 +48,10 @@ const GraphVisualizer = ({ graphData, metrics, nodeCsvFile, edgeCsvFile, gdfFile
     };
   }, [graphData]);
 
-  // Handle downloads
   const handleDownloadNodeCSV = () => nodeCsvFile && window.open(`http://localhost:8080/download/${nodeCsvFile}`, '_blank');
   const handleDownloadEdgeCSV = () => edgeCsvFile && window.open(`http://localhost:8080/download/${edgeCsvFile}`, '_blank');
   const handleDownloadGDF = () => gdfFile && window.open(`http://localhost:8080/download/${gdfFile}`, '_blank');
 
-  // Function to download current graph visualization as an image
   const handleDownloadImage = useCallback(() => {
     if (!sigmaRendererRef.current || !sigmaRendererRef.current.getSigma()) {
       console.error("Cannot download visualization: Sigma instance not available");
@@ -69,21 +62,16 @@ const GraphVisualizer = ({ graphData, metrics, nodeCsvFile, edgeCsvFile, gdfFile
       const sigmaInstance = sigmaRendererRef.current.getSigma();
       const containerRef = sigmaRendererRef.current.getContainer();
       
-      // Try to use the direct Sigma method if available (ideal solution)
       let downloadSuccessful = false;
       
-      // Try to access the Sigma renderer 
       if (typeof sigmaInstance.refresh === 'function') {
-        // Make sure the visualization is up to date
         sigmaInstance.refresh();
         
-        // Try to access snapshot method
         const canvasRenderer = sigmaInstance.getCanvasRenderer?.() || 
                               sigmaInstance.getRenderer?.();
                               
         if (canvasRenderer && typeof canvasRenderer.snapshot === 'function') {
           console.log("Using Sigma's built-in snapshot method");
-          // Sigma v2 provides a snapshot method to get the rendered graph
           const snapshot = canvasRenderer.snapshot({
             download: true,
             filename: 'graph_visualization.png',
@@ -95,11 +83,9 @@ const GraphVisualizer = ({ graphData, metrics, nodeCsvFile, edgeCsvFile, gdfFile
         }
       }
       
-      // If the direct method failed, use our canvas-based approach
       if (!downloadSuccessful) {
         console.log("Falling back to manual canvas capture method");
         
-        // Get references to Sigma container
         const sigmaContainer = document.querySelector('.sigma-container');
         
         if (!sigmaContainer) {
@@ -107,7 +93,6 @@ const GraphVisualizer = ({ graphData, metrics, nodeCsvFile, edgeCsvFile, gdfFile
           return;
         }
         
-        // Get all canvases in the Sigma container
         const canvases = sigmaContainer.querySelectorAll('canvas');
         
         if (!canvases || canvases.length === 0) {
@@ -115,28 +100,22 @@ const GraphVisualizer = ({ graphData, metrics, nodeCsvFile, edgeCsvFile, gdfFile
           return;
         }
         
-        // Get the container dimensions
         const containerRect = sigmaContainer.getBoundingClientRect();
         const width = containerRect.width;
         const height = containerRect.height;
         
-        // Create a new canvas for the final image
         const outputCanvas = document.createElement('canvas');
         outputCanvas.width = width;
         outputCanvas.height = height;
         const outputCtx = outputCanvas.getContext('2d');
         
-        // Fill with a white background
         outputCtx.fillStyle = 'white';
         outputCtx.fillRect(0, 0, width, height);
         
-        // Draw each canvas in order
         console.log(`Drawing ${canvases.length} canvases to output`);
         Array.from(canvases).forEach((canvas, index) => {
           try {
-            // Check if the canvas is empty or has content
             if (canvas.width > 0 && canvas.height > 0) {
-              // Draw maintaining the aspect ratio
               outputCtx.drawImage(canvas, 0, 0, width, height);
               console.log(`Canvas ${index} drawn successfully`);
             } else {
@@ -147,7 +126,6 @@ const GraphVisualizer = ({ graphData, metrics, nodeCsvFile, edgeCsvFile, gdfFile
           }
         });
         
-        // Create a download link
         const link = document.createElement('a');
         link.download = 'graph_visualization.png';
         link.href = outputCanvas.toDataURL('image/png');
@@ -158,7 +136,6 @@ const GraphVisualizer = ({ graphData, metrics, nodeCsvFile, edgeCsvFile, gdfFile
         console.log("Visualization downloaded successfully via manual method");
       }
       
-      // Show success feedback regardless of method used
       setDownloadSuccess(true);
       setTimeout(() => {
         setDownloadSuccess(false);
@@ -169,34 +146,28 @@ const GraphVisualizer = ({ graphData, metrics, nodeCsvFile, edgeCsvFile, gdfFile
     }
   }, []);
 
-  // Function to toggle ForceAtlas2
   const toggleForceAtlas2 = useCallback(() => {
     if (sigmaRendererRef.current && sigmaRendererRef.current.toggleForceAtlas2) {
       sigmaRendererRef.current.toggleForceAtlas2();
     }
   }, []);
 
-  // Function to center the camera view
   const centerView = useCallback(() => {
     if (sigmaRendererRef.current && sigmaRendererRef.current.centerView) {
       sigmaRendererRef.current.centerView();
     }
   }, []);
 
-  // Handle node size change
   const handleNodeSizeChange = useCallback((event, newValue) => {
     setNodeSize(newValue);
   }, []);
 
-  // Handle toggle labels
   const handleToggleLabels = useCallback(() => {
     setShowLabels(!showLabels);
   }, [showLabels]);
 
-  // Effect to handle renderer cleanup on unmount
   useEffect(() => {
     return () => {
-      // Clean up any resources when component unmounts
       if (sigmaRendererRef.current && sigmaRendererRef.current.getSigma) {
         const sigma = sigmaRendererRef.current.getSigma();
         if (sigma) {
@@ -212,7 +183,6 @@ const GraphVisualizer = ({ graphData, metrics, nodeCsvFile, edgeCsvFile, gdfFile
 
   return (
     <Card sx={{ p: 3, boxShadow: 3, borderRadius: 2, height: '100%' }}>
-      {/* Header */}
       <GraphHeader 
         nodeCsvFile={nodeCsvFile}
         edgeCsvFile={edgeCsvFile}
@@ -235,10 +205,8 @@ const GraphVisualizer = ({ graphData, metrics, nodeCsvFile, edgeCsvFile, gdfFile
         </Box>
       ) : (
         <>
-          {/* Legend */}
           <GraphLegend />
           
-          {/* Controls */}
           <GraphControls 
             toggleForceAtlas2={toggleForceAtlas2}
             centerView={centerView}
@@ -250,7 +218,6 @@ const GraphVisualizer = ({ graphData, metrics, nodeCsvFile, edgeCsvFile, gdfFile
             rendererReady={true}
           />
 
-          {/* Graph renderer */}
           <Box sx={{ 
             display: 'flex', 
             flexDirection: 'column', 
@@ -299,13 +266,12 @@ const GraphVisualizer = ({ graphData, metrics, nodeCsvFile, edgeCsvFile, gdfFile
               setIsForceAtlas2Running={setIsForceAtlas2Running}
               graphDetail={graphDetail}
               isLargeGraph={isLargeGraph}
-              loading={false} // Don't show the loading overlay in the SigmaRenderer
+              loading={false}
               error={error}
               setRendererReady={setRendererReady}
             />
           </Box>
 
-          {/* Node details */}
           {selectedNode && sigmaRendererRef.current && (
             <NodeDetailsPanel 
               selectedNode={selectedNode} 
@@ -313,16 +279,13 @@ const GraphVisualizer = ({ graphData, metrics, nodeCsvFile, edgeCsvFile, gdfFile
             />
           )}
           
-          {/* Metrics */}
           <CorePeripheryMetrics 
             graphData={graphData} 
             metrics={metrics}
           />
           
-          {/* Edge distribution */}
           <EdgeDistribution graphData={graphData} />
           
-          {/* Connection Pie Chart */}
           <Grid container spacing={2} sx={{ mt: 2 }}>
             <Grid item xs={12}>
               <Typography variant="h6" sx={{ mb: 1 }}>Connection Pattern Visualization</Typography>

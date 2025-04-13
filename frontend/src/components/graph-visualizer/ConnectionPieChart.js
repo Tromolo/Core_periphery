@@ -6,7 +6,6 @@ import { useTheme } from '@mui/material/styles';
 const ConnectionPieChart = ({ metrics, graphData }) => {
   const theme = useTheme();
   const edgeStats = useMemo(() => {
-    // If we have backend-calculated connection patterns, use them
     if (metrics?.core_periphery_analysis?.connection_patterns) {
       const patterns = metrics.core_periphery_analysis.connection_patterns;
       return [
@@ -34,10 +33,8 @@ const ConnectionPieChart = ({ metrics, graphData }) => {
       ];
     }
     
-    // Fallback to calculating from graphData
     if (!graphData?.nodes || !graphData?.edges) return null;
     
-    // Handle both formats: original graph data (type: 'C'/'P') and processed graph data (isCore: true/false)
     const coreNodeIds = new Set();
     graphData.nodes.forEach(node => {
       if ((node.type === 'C') || (node.isCore === true)) {
@@ -107,7 +104,6 @@ const ConnectionPieChart = ({ metrics, graphData }) => {
             cx, cy, midAngle, innerRadius, outerRadius, percent, index, name, percentage
           }) => {
             const RADIAN = Math.PI / 180;
-            // Increase distance from pie for label placement
             const radius = outerRadius * 1.2;
             const x = cx + radius * Math.cos(-midAngle * RADIAN);
             const y = cy + radius * Math.sin(-midAngle * RADIAN);

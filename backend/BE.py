@@ -137,7 +137,6 @@ def _kernighan_lin_(A_indptr, A_indices, A_data, num_nodes):
         for i in range(num_nodes):
             qmax = -np.inf
 
-            # select a node of which we update the label
             numertmp = numer
             for k in range(num_nodes):
                 if fixed[k] == 1:
@@ -164,7 +163,6 @@ def _kernighan_lin_(A_indptr, A_indices, A_data, num_nodes):
             dQ = dQ + qmax - Qold
             Qold = qmax
 
-            # Save the core-periphery pair if it attains the largest quality
             if dQmax < dQ:
                 xbest = xt.copy()
                 dQmax = dQ

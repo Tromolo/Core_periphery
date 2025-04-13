@@ -5,7 +5,6 @@ const EdgeDistribution = ({ graphData }) => {
   const edgeStats = useMemo(() => {
     if (!graphData?.nodes || !graphData?.edges) return null;
     
-    // Handle both formats: original graph data (type: 'C'/'P') and processed graph data (isCore: true/false)
     const coreNodeIds = new Set();
     graphData.nodes.forEach(node => {
       if ((node.type === 'C') || (node.isCore === true)) {

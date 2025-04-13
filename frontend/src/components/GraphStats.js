@@ -23,9 +23,7 @@ import {
   Download
 } from '@mui/icons-material';
 
-// Helper function to convert data to CSV
 const generateCSV = (graphData, metrics, communityData) => {
-  // First, determine which data source to use
   let nodes = [];
   if (graphData && graphData.nodes && graphData.nodes.length > 0) {
     nodes = graphData.nodes;
@@ -38,16 +36,12 @@ const generateCSV = (graphData, metrics, communityData) => {
     return null;
   }
 
-  // Define CSV columns - removed X and Y coordinates
   const headers = ['Node ID', 'Degree', 'Community'];
   
-  // Create header row
   let csvContent = headers.join(',') + '\n';
   
-  // Get community data mapping if available
   const communityMapping = communityData?.community_membership || {};
   
-  // Add each node data
   nodes.forEach(node => {
     const nodeId = node.id || '';
     const degree = node.degree !== undefined ? node.degree : 0;
@@ -65,7 +59,6 @@ const generateCSV = (graphData, metrics, communityData) => {
   return csvContent;
 };
 
-// Function to trigger CSV download
 const downloadCSV = (graphData, metrics, communityData) => {
   try {
     const csvContent = generateCSV(graphData, metrics, communityData);
@@ -76,16 +69,13 @@ const downloadCSV = (graphData, metrics, communityData) => {
       return;
     }
     
-    // Create a blob and download link
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     
-    // Set filename with timestamp to avoid overwriting
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const filename = `network_node_data_${timestamp}.csv`;
     
-    // Set up and trigger the download
     link.setAttribute('href', url);
     link.setAttribute('download', filename);
     link.style.visibility = 'hidden';
@@ -93,7 +83,6 @@ const downloadCSV = (graphData, metrics, communityData) => {
     link.click();
     document.body.removeChild(link);
     
-    // Clean up the URL object
     setTimeout(() => {
       URL.revokeObjectURL(url);
     }, 100);
@@ -202,20 +191,17 @@ const GraphStats = ({ graphData, metrics, communityData, networkMetrics }) => {
     try {
       downloadCSV(graphData, metrics, communityData);
       setExportSuccess(true);
-      // Reset the success message after 3 seconds
       setTimeout(() => setExportSuccess(false), 3000);
     } catch (error) {
       console.error("Error handling download:", error);
     }
   };
 
-  // Get average degree from networkMetrics if available (from DegreeHistogram)
   const averageDegree = networkMetrics?.basicStats?.avgDegree || 
                        metrics?.average_degree || 
                        metrics?.avg_degree || 
                        '0';
   
-  // Log values to help debug
   console.log("GraphStats NetworkMetrics:", {
     basicStats: networkMetrics?.basicStats,
     avgDegree: networkMetrics?.basicStats?.avgDegree,

@@ -37,14 +37,13 @@ class OptimizedBE(CPAlgorithm):
         self.early_stop = early_stop
         self.use_parallel = use_parallel
         self.respect_num_runs = respect_num_runs
-        self.max_workers = min(num_runs, 8)  # Cap workers at 8
-        self.convergence_threshold = 0.001   # 0.1% improvement threshold for early stopping
-        self.rho = None                      # Template CP pattern
-        self.Q_ = None                        # Core quality score
-        self.c_ = None                        # Core/periphery assignments
-        self.x_ = None                        # Continuous coreness values
-        self.nodelabel = None                # Node labels from graph
-        
+        self.max_workers = min(num_runs, 8) 
+        self.convergence_threshold = 0.001 
+        self.rho = None                      
+        self.Q_ = None                       
+        self.c_ = None                       
+        self.x_ = None                       
+        self.nodelabel = None                
     def detect(self, G):
         """Detect core-periphery structure efficiently.
         
@@ -54,13 +53,10 @@ class OptimizedBE(CPAlgorithm):
         import time
         start_time = time.time()
         
-        # Convert to adjacency matrix
         A, nodelabel = utils.to_adjacency_matrix(G)
         N = A.shape[0]
         self.nodelabel = nodelabel
         
-        # Determine if we should reduce the number of runs based on network size
-        # Only reduce runs if respect_num_runs is False
         if not self.respect_num_runs and N > 100:
             adaptive_runs = min(self.num_runs, max(1, int(100 / N)))
             if adaptive_runs < self.num_runs:
@@ -70,7 +66,6 @@ class OptimizedBE(CPAlgorithm):
             if N > 100:
                 print(f"Using full {self.num_runs} runs as requested (respect_num_runs=True)")
                 
-        # Generate template matrix
         rho = np.ones((N, N))
         self.rho = rho
         
@@ -83,7 +78,6 @@ class OptimizedBE(CPAlgorithm):
         early_stops = 0
         
         if self.use_parallel and adaptive_runs > 1 and N > 50:
-            # Use ThreadPoolExecutor for parallelization
             with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
                 results = list(executor.map(lambda _: self._single_run(A, N), run_iter))
                 
@@ -94,7 +88,6 @@ class OptimizedBE(CPAlgorithm):
                     qbest = q
                     cbest = c
         else:
-            # Sequential execution
             for i in run_iter:
                 c, q = self._single_run(A, N)
                 qs_history.append(q)
@@ -104,7 +97,6 @@ class OptimizedBE(CPAlgorithm):
                     qbest = q
                     cbest = c
                 
-                # Early stopping check
                 if self.early_stop and i > 0:
                     improvement = (q - qs_history[i-1]) / abs(qs_history[i-1]) if qs_history[i-1] != 0 else 1.0
                     if improvement < self.convergence_threshold:
@@ -113,7 +105,6 @@ class OptimizedBE(CPAlgorithm):
                         print(f"Note: This only stops the current optimization process. All {adaptive_runs} runs were planned.")
                         break
         
-        # Convert to continuous values (0.0 for periphery, 1.0 for core)
         xbest = np.array(cbest, dtype=float)
         
         self.c_ = cbest
@@ -121,12 +112,10 @@ class OptimizedBE(CPAlgorithm):
         self.Q_ = qbest
         self.qs_ = qs_history
         
-        # Store performance stats
         self.runs_planned = adaptive_runs
         self.runs_completed = runs_completed
         self.early_stops = early_stops
         
-        # Report execution stats
         end_time = time.time()
         self.execution_time = end_time - start_time
         
@@ -167,12 +156,10 @@ class OptimizedBE(CPAlgorithm):
         :return: Core assignments and quality score
         :rtype: tuple(numpy.ndarray, float)
         """
-        # Create random initial partition
         c = np.zeros(N).astype(int)
         random_half = np.random.choice(N, size=N//2, replace=False)
         c[random_half] = 1
         
-        # Optimize using Kernighan-Lin algorithm
         old_q = -float('inf')
         q = self._score(A, c, c)[0]
         
@@ -184,18 +171,16 @@ class OptimizedBE(CPAlgorithm):
             best_q = q
             best_move = -1
             
-            # Try moving each node
             for i in range(N):
-                c[i] = 1 - c[i]  # Flip node i
+                c[i] = 1 - c[i]  
                 new_q = self._score(A, c, c)[0]
                 
                 if new_q > best_q:
                     best_q = new_q
                     best_move = i
                 
-                c[i] = 1 - c[i]  # Flip back
+                c[i] = 1 - c[i]  
             
-            # Make the best move if it improves score
             if best_move >= 0:
                 c[best_move] = 1 - c[best_move]
                 q = best_q
@@ -213,7 +198,6 @@ def _optimized_kernighan_lin_(A_indptr, A_indices, A_data, num_nodes):
     M = np.sum(A_data) / 2
     p = M / np.maximum(1, (num_nodes * (num_nodes - 1) / 2))
     
-    # Initialize with random solution 
     x = np.zeros(num_nodes)
     for i in range(num_nodes):
         if np.random.rand() < 0.5:
@@ -224,13 +208,11 @@ def _optimized_kernighan_lin_(A_indptr, A_indices, A_data, num_nodes):
     fixed = np.zeros(num_nodes)
     Dperi = np.zeros(num_nodes)
 
-    # Early convergence parameters
     min_improvement = 1e-6
     patience = 3
     no_improvement_count = 0
     last_dQmax = 0
 
-    # Maximum iterations adjusted based on network size
     max_iter = min(num_nodes, max(20, num_nodes // 5))
     
     for _j in range(max_iter):
@@ -256,13 +238,10 @@ def _optimized_kernighan_lin_(A_indptr, A_indices, A_data, num_nodes):
         dQ = 0
         dQmax = -np.inf
         
-        # Optimize the inner loop iterations for large networks
         inner_max = num_nodes
         if num_nodes > 200:
-            # For large networks, consider only a random subset of nodes for each iteration
             inner_max = min(num_nodes, max(50, num_nodes // 4))
             
-        # Consider nodes in random order
         node_order = np.arange(num_nodes)
         np.random.shuffle(node_order)
         
@@ -271,13 +250,11 @@ def _optimized_kernighan_lin_(A_indptr, A_indices, A_data, num_nodes):
             qmax = -np.inf
             nid = 0
 
-            # For large networks, only consider a sample of candidate nodes
             candidate_nodes = np.arange(num_nodes)
             if num_nodes > 100:
                 np.random.shuffle(candidate_nodes)
                 candidate_nodes = candidate_nodes[:min(num_nodes, max(30, num_nodes // 3))]
             
-            # Select a node of which we update the label
             numertmp = numer
             for k_idx in range(len(candidate_nodes)):
                 k = candidate_nodes[k_idx]
@@ -302,7 +279,6 @@ def _optimized_kernighan_lin_(A_indptr, A_indices, A_data, num_nodes):
             numer = numertmp
             Nperi += 2 * xt[nid] - 1
             
-            # Update Dperi values
             neighbors = A_indices[A_indptr[nid] : A_indptr[nid + 1]]
             for _k, neik in enumerate(neighbors):
                 Dperi[neik] += 2 * xt[nid] - 1
@@ -311,14 +287,12 @@ def _optimized_kernighan_lin_(A_indptr, A_indices, A_data, num_nodes):
             dQ = dQ + qmax - Qold
             Qold = qmax
 
-            # Save the best solution
             if dQmax < dQ:
                 xbest = xt.copy()
                 dQmax = dQ
                 
             fixed[nid] = 1
             
-        # Early stopping based on improvement
         improvement = dQmax - last_dQmax
         if improvement < min_improvement:
             no_improvement_count += 1
@@ -336,7 +310,6 @@ def _optimized_kernighan_lin_(A_indptr, A_indices, A_data, num_nodes):
     return xbest
 
 
-# Reuse the original score function
 @numba.jit(nopython=True, cache=True)
 def _score_(A_indptr, A_indices, A_data, _c, _x, num_nodes):
     M = 0.0

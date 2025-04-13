@@ -33,7 +33,6 @@ const MetricsTable = ({ metrics }) => {
   if (!metrics) return null;
 
   const formatParameterName = (name) => {
-    // Convert parameter names to more readable format
     const formattedNames = {
       'alpha': 'Alpha (α)',
       'beta': 'Beta (β)',
@@ -41,7 +40,6 @@ const MetricsTable = ({ metrics }) => {
       'threshold': 'Core Classification Threshold',
       'final_score': 'Quality Score (Q)',
       'execution_time': 'Execution Time (s)',
-      'runs_planned': 'Planned Runs',
       'runs_completed': 'Completed Runs',
       'early_stops': 'Early Stops',
       'parallel': 'Parallel Execution',
@@ -53,7 +51,6 @@ const MetricsTable = ({ metrics }) => {
   };
 
   const formatParameterValue = (value) => {
-    // Format values appropriately
     if (typeof value === 'number') {
       return Number.isInteger(value) ? value : value.toFixed(3);
     }
@@ -64,8 +61,6 @@ const MetricsTable = ({ metrics }) => {
   };
 
   const getParameterDescription = (key) => {
-    // Provide descriptions for each parameter
-    // Determine if we're using the Rombach or Cucuringu algorithm
     const isRombach = metrics.algorithm_params?.alpha !== undefined;
     const isCucuringu = metrics.algorithm_params?.beta !== undefined && !metrics.algorithm_params?.alpha;
     
@@ -89,26 +84,31 @@ const MetricsTable = ({ metrics }) => {
   };
 
   const getAlgorithmName = (metrics) => {
-    // Improved detection of algorithm type
     if (metrics.algorithm_stats?.algorithm === 'rombach') {
       return "Rombach Algorithm";
     } else if (metrics.algorithm_stats?.algorithm === 'be') {
       return "Borgatti & Everett (BE) Algorithm";
     } else if (metrics.algorithm_stats?.algorithm === 'cucuringu') {
       return "Cucuringu Algorithm (LowRankCore)";
-    } else if (metrics.algorithm_params?.alpha !== undefined) {
+    } 
+    
+    else if (metrics.network_metrics?.rombach_params) {
+      return "Rombach Algorithm";
+    } else if (metrics.network_metrics?.be_params) {
+      return "Borgatti & Everett (BE) Algorithm";
+    } else if (metrics.network_metrics?.cucuringu_params) {
+      return "Cucuringu Algorithm (LowRankCore)";
+    } 
+    
+    else if (metrics.algorithm_params?.alpha !== undefined) {
       return "Rombach Algorithm";
     } else if (metrics.algorithm_params?.beta !== undefined && !metrics.algorithm_params?.alpha) {
       return "Cucuringu Algorithm (LowRankCore)";
     } else if (metrics.algorithm_params?.num_runs !== undefined && !metrics.algorithm_params?.alpha) {
-      // Only BE has num_runs but no alpha
       return "Borgatti & Everett (BE) Algorithm";
     }
     
-    // Additional fallback detection - if we have network_metrics, check structure quality
     if (metrics.network_metrics?.core_stats) {
-      // Based on the presence of core stats, we can assume some algorithm was run
-      // Default to Rombach as it's the most commonly used
       return "Core-Periphery Algorithm";
     }
     
@@ -116,7 +116,6 @@ const MetricsTable = ({ metrics }) => {
   };
 
   const getAlgorithmDescription = (metrics) => {
-    // First check algorithm_stats if available
     if (metrics.algorithm_stats?.algorithm === 'rombach') {
       return "A continuous core-periphery detection method that optimizes a quality function based on the density of connections. It allows for a more nuanced assignment of nodes to the core or periphery.";
     } else if (metrics.algorithm_stats?.algorithm === 'be') {
@@ -125,22 +124,26 @@ const MetricsTable = ({ metrics }) => {
       return "A spectral method for core-periphery detection using low-rank matrix approximation and eigendecomposition. This algorithm finds core-periphery structure by analyzing the network's spectral properties.";
     }
     
-    // Fallback to checking params if algorithm_stats doesn't have the info
-    if (metrics.algorithm_params?.alpha !== undefined) {
+    else if (metrics.network_metrics?.rombach_params) {
+      return "A continuous core-periphery detection method that optimizes a quality function based on the density of connections. It allows for a more nuanced assignment of nodes to the core or periphery.";
+    } else if (metrics.network_metrics?.be_params) {
+      return "A discrete core-periphery detection method based on correlation with an ideal core-periphery structure. This algorithm identifies a binary core/periphery structure.";
+    } else if (metrics.network_metrics?.cucuringu_params) {
+      return "A spectral method for core-periphery detection using low-rank matrix approximation and eigendecomposition. This algorithm finds core-periphery structure by analyzing the network's spectral properties.";
+    }
+    
+    else if (metrics.algorithm_params?.alpha !== undefined) {
       return "A continuous core-periphery detection method that optimizes a quality function based on the density of connections. It allows for a more nuanced assignment of nodes to the core or periphery.";
     } else if (metrics.algorithm_params?.beta !== undefined && !metrics.algorithm_params?.alpha) {
       return "A spectral method for core-periphery detection using low-rank matrix approximation and eigendecomposition. This algorithm finds core-periphery structure by analyzing the network's spectral properties.";
     } else if (metrics.algorithm_params?.num_runs !== undefined && !metrics.algorithm_params?.alpha) {
-      // Only BE has num_runs but no alpha
       return "A discrete core-periphery detection method based on correlation with an ideal core-periphery structure. This algorithm identifies a binary core/periphery structure.";
     }
     
-    // Final fallback - generic description
     return "This algorithm detects core-periphery structure by dividing the network into densely connected core nodes and more sparsely connected peripheral nodes.";
   };
 
   const getAlgorithmReference = (metrics) => {
-    // First check algorithm_stats if available
     if (metrics.algorithm_stats?.algorithm === 'rombach') {
       return "Reference: Rombach et al. (2017). \"Core-Periphery Structure in Networks.\"";
     } else if (metrics.algorithm_stats?.algorithm === 'be') {
@@ -149,38 +152,70 @@ const MetricsTable = ({ metrics }) => {
       return "Reference: Cucuringu et al. (2016). \"Detection of core-periphery structure in networks using spectral methods and geodesic paths.\"";
     }
     
-    // Fallback to checking params
-    if (metrics.algorithm_params?.alpha !== undefined) {
+    else if (metrics.network_metrics?.rombach_params) {
+      return "Reference: Rombach et al. (2017). \"Core-Periphery Structure in Networks.\"";
+    } else if (metrics.network_metrics?.be_params) {
+      return "Reference: Borgatti & Everett (2000). \"Models of Core/Periphery Structures.\"";
+    } else if (metrics.network_metrics?.cucuringu_params) {
+      return "Reference: Cucuringu et al. (2016). \"Detection of core-periphery structure in networks using spectral methods and geodesic paths.\"";
+    }
+    
+    else if (metrics.algorithm_params?.alpha !== undefined) {
       return "Reference: Rombach et al. (2017). \"Core-Periphery Structure in Networks.\"";
     } else if (metrics.algorithm_params?.beta !== undefined && !metrics.algorithm_params?.alpha) {
       return "Reference: Cucuringu et al. (2016). \"Detection of core-periphery structure in networks using spectral methods and geodesic paths.\"";
     } else if (metrics.algorithm_params?.num_runs !== undefined && !metrics.algorithm_params?.alpha) {
-      // Only BE has num_runs but no alpha
       return "Reference: Borgatti & Everett (2000). \"Models of Core/Periphery Structures.\"";
     }
     
-    // Generic reference list if we can't determine the specific algorithm
     return "References: Borgatti & Everett (2000), Rombach et al. (2017), Cucuringu et al. (2016)";
   };
 
   const getAlgorithmParams = () => {
     const algorithm_stats = metrics.algorithm_stats || {};
+    
+    let algorithmParams = {};
+    
+    if (metrics.network_metrics?.rombach_params) {
+      algorithmParams = {
+        ...metrics.network_metrics.rombach_params,
+        alpha: metrics.network_metrics.rombach_params.alpha,
+        beta: metrics.network_metrics.rombach_params.beta,
+        num_runs: metrics.network_metrics.rombach_params.num_runs,
+        final_score: metrics.network_metrics.rombach_params.Q
+      };
+      delete algorithmParams.Q;
+    } else if (metrics.network_metrics?.cucuringu_params) {
+      algorithmParams = {
+        ...metrics.network_metrics.cucuringu_params,
+        beta: metrics.network_metrics.cucuringu_params.beta,
+        final_score: metrics.network_metrics.cucuringu_params.Q
+      };
+      delete algorithmParams.Q;
+    } else if (metrics.network_metrics?.be_params) {
+      algorithmParams = {
+        ...metrics.network_metrics.be_params,
+        num_runs: metrics.network_metrics.be_params.num_runs,
+        final_score: metrics.network_metrics.be_params.Q
+      };
+      delete algorithmParams.Q;
+    }
+    
     const algorithm_params = metrics.algorithm_params || {};
     
-    // Combine algorithm stats with parameters
     const combinedParams = {
       ...algorithm_params,
+      ...algorithmParams,
       ...(algorithm_stats.final_score !== undefined ? { final_score: algorithm_stats.final_score } : {}),
       ...(algorithm_stats.execution_time !== undefined ? { execution_time: algorithm_stats.execution_time } : {}),
-      ...(algorithm_stats.runs_planned !== undefined ? { runs_planned: algorithm_stats.runs_planned } : {}),
       ...(algorithm_stats.runs_completed !== undefined ? { runs_completed: algorithm_stats.runs_completed } : {}),
       ...(algorithm_stats.early_stops !== undefined ? { early_stops: algorithm_stats.early_stops } : {})
     };
     
-    // If we don't have params, try to extract what we can from network_metrics
+    delete combinedParams.Q;
+    
     if (Object.keys(combinedParams).length === 0 && metrics.network_metrics?.core_stats) {
       const coreStats = metrics.network_metrics.core_stats;
-      // Add a fallback quality score if available
       if (coreStats.ideal_pattern_match !== undefined) {
         combinedParams.final_score = coreStats.ideal_pattern_match / 100;
       }
@@ -190,20 +225,16 @@ const MetricsTable = ({ metrics }) => {
   };
 
   const getDisplayParameters = (params) => {
-    // Prioritize showing these parameters in this order
     const priorityParams = [
       'final_score', 
       'alpha', 
       'beta', 
       'num_runs',
-      'threshold',
-      'execution_time',
       'runs_planned',
       'runs_completed',
       'early_stops'
     ];
     
-    // Filter out parameters with undefined values
     const filteredParams = Object.entries(params)
       .filter(([_, value]) => value !== undefined)
       .reduce((obj, [key, value]) => {
@@ -211,7 +242,6 @@ const MetricsTable = ({ metrics }) => {
         return obj;
       }, {});
     
-    // Sort parameters by priority
     return Object.entries(filteredParams)
       .sort((a, b) => {
         const indexA = priorityParams.indexOf(a[0]);
@@ -247,7 +277,6 @@ const MetricsTable = ({ metrics }) => {
 
   const formatCoreness = (value) => {
     if (typeof value === 'number') {
-      // Show a maximum of 3 decimal places
       return value.toFixed(Math.min(3, value.toString().split('.')[1]?.length || 0));
     }
     return value;
@@ -260,9 +289,25 @@ const MetricsTable = ({ metrics }) => {
   const params = getAlgorithmParams();
   const displayParams = getDisplayParameters(params);
   const algorithmName = getAlgorithmName(metrics);
-  const qualityScore = metrics.algorithm_stats?.final_score;
+  
+  let qualityScore;
+  
+  if (metrics.algorithm_stats?.final_score !== undefined) {
+    qualityScore = metrics.algorithm_stats.final_score;
+  } 
+  else if (metrics.network_metrics?.rombach_params?.Q !== undefined) {
+    qualityScore = metrics.network_metrics.rombach_params.Q;
+  }
+  else if (metrics.network_metrics?.cucuringu_params?.Q !== undefined) {
+    qualityScore = metrics.network_metrics.cucuringu_params.Q;
+  }
+  else if (metrics.network_metrics?.be_params?.Q !== undefined) {
+    qualityScore = metrics.network_metrics.be_params.Q;
+  }
+  else if (params.final_score !== undefined) {
+    qualityScore = params.final_score;
+  }
 
-  // Determine if centrality metrics are available for the node tables
   const hasCloseness = metrics.top_nodes.top_core_nodes.length > 0 && 
     metrics.top_nodes.top_core_nodes[0].hasOwnProperty('closeness') && 
     metrics.top_nodes.top_core_nodes[0].closeness > 0;
@@ -270,7 +315,6 @@ const MetricsTable = ({ metrics }) => {
     metrics.top_nodes.top_core_nodes[0].hasOwnProperty('betweenness') && 
     metrics.top_nodes.top_core_nodes[0].betweenness > 0;
 
-  // Get centrality metrics from the network_metrics object
   const hasCentralityMetrics = metrics.network_metrics?.centrality_metrics;
   const hasClosenessMetrics = hasCentralityMetrics && 
     metrics.network_metrics.centrality_metrics.avg_closeness !== undefined && 
@@ -279,15 +323,13 @@ const MetricsTable = ({ metrics }) => {
     metrics.network_metrics.centrality_metrics.avg_betweenness !== undefined && 
     metrics.network_metrics.centrality_metrics.avg_betweenness > 0;
 
-  // Check if we have actual non-zero metrics to show
   const hasMeaningfulCloseness = hasClosenessMetrics;
   const hasMeaningfulBetweenness = hasBetweennessMetrics;
   const hasAnyCentralityMetrics = hasMeaningfulCloseness || hasMeaningfulBetweenness;
   
-  // Add a function to create a color-coded quality score display
   const renderQualityScore = (score) => {
-    const interpretation = getQualityInterpretation(score);
-    const color = getQualityColor(score);
+  const interpretation = getQualityInterpretation(score);
+  const color = getQualityColor(score);
     
     return (
       <Box sx={{ display: 'flex', alignItems: 'center', mt: 2 }}>
@@ -358,8 +400,6 @@ const MetricsTable = ({ metrics }) => {
               {getAlgorithmReference(metrics)}
             </Typography>
             
-            {/* Add Quality Score display if available */}
-            {qualityScore !== undefined && renderQualityScore(qualityScore)}
           </Paper>
 
           <Typography variant="h6" sx={{ mb: 2 }}>
@@ -398,7 +438,6 @@ const MetricsTable = ({ metrics }) => {
                 alignItems: 'center',
                 position: 'relative'
               }}>
-                {/* Simple visual representation of core-periphery */}
                 <Box sx={{ 
                   width: 60, 
                   height: 60, 
@@ -474,130 +513,138 @@ const MetricsTable = ({ metrics }) => {
             These parameters control how the core-periphery detection algorithm identifies and categorizes nodes. 
             Different settings can significantly affect the resulting structure.
           </Typography>
-          <TableContainer component={Paper} sx={{ mb: 4, boxShadow: 'none' }}>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell sx={{ fontWeight: 'bold' }}>Parameter</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold' }}>Value</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold' }}>Description</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {/* Algorithm Configuration Parameters */}
-                {(displayParams.alpha !== undefined || 
-                  displayParams.beta !== undefined || 
-                  displayParams.num_runs !== undefined || 
-                  displayParams.threshold !== undefined) && (
-                  <TableRow>
-                    <TableCell colSpan={3} sx={{ bgcolor: 'rgba(25, 118, 210, 0.05)', fontWeight: 'bold' }}>
-                      Algorithm Configuration
-                    </TableCell>
-                  </TableRow>
-                )}
-                {displayParams.alpha !== undefined && (
-                  <TableRow>
-                    <TableCell>{formatParameterName('alpha')}</TableCell>
-                    <TableCell>{formatParameterValue(displayParams.alpha)}</TableCell>
-                    <TableCell>{getParameterDescription('alpha')}</TableCell>
-                  </TableRow>
-                )}
-                {displayParams.beta !== undefined && (
-                  <TableRow>
-                    <TableCell>{formatParameterName('beta')}</TableCell>
-                    <TableCell>{formatParameterValue(displayParams.beta)}</TableCell>
-                    <TableCell>{getParameterDescription('beta')}</TableCell>
-                  </TableRow>
-                )}
-                {displayParams.num_runs !== undefined && (
-                  <TableRow>
-                    <TableCell>{formatParameterName('num_runs')}</TableCell>
-                    <TableCell>{formatParameterValue(displayParams.num_runs)}</TableCell>
-                    <TableCell>{getParameterDescription('num_runs')}</TableCell>
-                  </TableRow>
-                )}
-                {displayParams.threshold !== undefined && (
-                  <TableRow>
-                    <TableCell>{formatParameterName('threshold')}</TableCell>
-                    <TableCell>{formatParameterValue(displayParams.threshold)}</TableCell>
-                    <TableCell>{getParameterDescription('threshold')}</TableCell>
-                  </TableRow>
-                )}
-                
-                {/* Performance Metrics */}
-                {(displayParams.execution_time !== undefined || 
-                  displayParams.runs_planned !== undefined || 
-                  displayParams.runs_completed !== undefined || 
-                  displayParams.early_stops !== undefined) && (
-                  <TableRow>
-                    <TableCell colSpan={3} sx={{ bgcolor: 'rgba(76, 175, 80, 0.05)', fontWeight: 'bold' }}>
-                      Performance Metrics
-                    </TableCell>
-                  </TableRow>
-                )}
-                {displayParams.execution_time !== undefined && (
-                  <TableRow>
-                    <TableCell>{formatParameterName('execution_time')}</TableCell>
-                    <TableCell>{formatParameterValue(displayParams.execution_time)}</TableCell>
-                    <TableCell>{getParameterDescription('execution_time')}</TableCell>
-                  </TableRow>
-                )}
-                {displayParams.runs_planned !== undefined && (
-                  <TableRow>
-                    <TableCell>{formatParameterName('runs_planned')}</TableCell>
-                    <TableCell>{formatParameterValue(displayParams.runs_planned)}</TableCell>
-                    <TableCell>{getParameterDescription('runs_planned')}</TableCell>
-                  </TableRow>
-                )}
-                {displayParams.runs_completed !== undefined && (
-                  <TableRow>
-                    <TableCell>{formatParameterName('runs_completed')}</TableCell>
-                    <TableCell>{formatParameterValue(displayParams.runs_completed)}</TableCell>
-                    <TableCell>{getParameterDescription('runs_completed')}</TableCell>
-                  </TableRow>
-                )}
-                {displayParams.early_stops !== undefined && (
-                  <TableRow>
-                    <TableCell>{formatParameterName('early_stops')}</TableCell>
-                    <TableCell>{formatParameterValue(displayParams.early_stops)}</TableCell>
-                    <TableCell>{getParameterDescription('early_stops')}</TableCell>
-                  </TableRow>
-                )}
-                
-                {/* Other Parameters */}
-                {Object.entries(displayParams)
-                  .filter(([key]) => !['alpha', 'beta', 'num_runs', 'threshold', 
-                                      'execution_time', 'runs_planned', 'runs_completed', 
-                                      'early_stops', 'final_score'].includes(key))
-                  .length > 0 && (
-                  <TableRow>
-                    <TableCell colSpan={3} sx={{ bgcolor: 'rgba(211, 47, 47, 0.05)', fontWeight: 'bold' }}>
-                      Additional Settings
-                    </TableCell>
-                  </TableRow>
-                )}
-                {Object.entries(displayParams)
-                  .filter(([key]) => !['alpha', 'beta', 'num_runs', 'threshold', 
-                                      'execution_time', 'runs_planned', 'runs_completed', 
-                                      'early_stops', 'final_score'].includes(key))
-                  .map(([key, value]) => (
-                    <TableRow key={key}>
-                      <TableCell>{formatParameterName(key)}</TableCell>
-                      <TableCell>{formatParameterValue(value)}</TableCell>
-                      <TableCell>{getParameterDescription(key)}</TableCell>
-                    </TableRow>
-                  ))
-                }
-              </TableBody>
-            </Table>
-          </TableContainer>
+          
+          <Grid container spacing={3} sx={{ mb: 4 }}>
+            {Object.entries(displayParams).map(([key, value]) => {
+              if (key === 'execution_time') return null;
+              
+              if (key === 'Q') return null;
+              
+              let icon;
+              let color;
+              let bgColor;
+              let borderColor;
+              
+              if (key === 'alpha') {
+                icon = <Settings sx={{ fontSize: 24 }} />;
+                color = '#e91e63';
+                bgColor = 'rgba(233, 30, 99, 0.08)';
+                borderColor = 'rgba(233, 30, 99, 0.2)';
+              } else if (key === 'beta') {
+                icon = <Timeline sx={{ fontSize: 24 }} />;
+                color = '#9c27b0';
+                bgColor = 'rgba(156, 39, 176, 0.08)';
+                borderColor = 'rgba(156, 39, 176, 0.2)';
+              } else if (key === 'num_runs' || key === 'runs_planned') {
+                icon = <Assessment sx={{ fontSize: 24 }} />;
+                color = '#2196f3';
+                bgColor = 'rgba(33, 150, 243, 0.08)';
+                borderColor = 'rgba(33, 150, 243, 0.2)';
+              } else if (key === 'runs_completed') {
+                icon = <CheckIcon sx={{ fontSize: 24 }} />;
+                color = '#4caf50';
+                bgColor = 'rgba(76, 175, 80, 0.08)';
+                borderColor = 'rgba(76, 175, 80, 0.2)';
+              } else if (key === 'early_stops') {
+                icon = <SpeedIcon sx={{ fontSize: 24 }} />;
+                color = '#ff9800';
+                bgColor = 'rgba(255, 152, 0, 0.08)';
+                borderColor = 'rgba(255, 152, 0, 0.2)';
+              } else if (key === 'final_score') {
+                icon = <StarIcon sx={{ fontSize: 24 }} />;
+                color = getQualityColor(value);
+                bgColor = `${getQualityColor(value)}10`;
+                borderColor = `${getQualityColor(value)}20`;
+              } else if (key === 'threshold') {
+                icon = <BarChart sx={{ fontSize: 24 }} />;
+                color = '#673ab7';
+                bgColor = 'rgba(103, 58, 183, 0.08)';
+                borderColor = 'rgba(103, 58, 183, 0.2)';
+              } else {
+                icon = <InfoIcon sx={{ fontSize: 24 }} />;
+                color = '#607d8b';
+                bgColor = 'rgba(96, 125, 139, 0.08)';
+                borderColor = 'rgba(96, 125, 139, 0.2)';
+              }
+              
+              return (
+                <Grid item xs={12} sm={6} md={4} key={key}>
+                  <Paper 
+                    elevation={0} 
+                    sx={{ 
+                      p: 2, 
+                      height: '100%',
+                      border: `1px solid ${borderColor}`,
+                      borderRadius: 2,
+                      bgcolor: bgColor,
+                      transition: 'transform 0.2s',
+                      '&:hover': {
+                        transform: 'translateY(-4px)',
+                        boxShadow: `0 6px 12px ${borderColor}`
+                      }
+                    }}
+                  >
+                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                      <Box sx={{ color: color, mr: 1.5 }}>
+                        {icon}
+                      </Box>
+                      <Tooltip title={getParameterDescription(key)}>
+                        <Typography variant="subtitle1" sx={{ fontWeight: 'medium', color: color }}>
+                          {formatParameterName(key)}
+                        </Typography>
+                      </Tooltip>
+                    </Box>
+                    
+                    {key === 'final_score' ? (
+                      <Box sx={{ mt: 1 }}>
+                        <Typography variant="h5" sx={{ fontWeight: 'bold', color }}>
+                          {formatParameterValue(value)}
+                        </Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
+                          <Box sx={{ width: '100%', mr: 1 }}>
+                            <LinearProgress 
+                              variant="determinate" 
+                              value={Math.min(value * 100, 100)} 
+                              sx={{ 
+                                height: 8, 
+                                borderRadius: 4,
+                                bgcolor: `${color}30`,
+                                '& .MuiLinearProgress-bar': {
+                                  bgcolor: color,
+                                  borderRadius: 4,
+                                }
+                              }}
+                            />
+                          </Box>
+                        </Box>
+                      </Box>
+                    ) : (
+                      <Box>
+                        <Typography variant="h5" sx={{ fontWeight: 'bold', color }}>
+                          {formatParameterValue(value)}
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                          {key === 'alpha' && 'Boundary Sharpness'}
+                          {key === 'beta' && 'Network Partitioning'}
+                          {key === 'num_runs' && 'Initialization Count'}
+                          {key === 'runs_planned' && 'Planned Runs'}
+                          {key === 'runs_completed' && 'Completed Runs'}
+                          {key === 'early_stops' && 'Early Convergence'}
+                          {key === 'threshold' && 'Core Threshold Value'}
+                        </Typography>
+                      </Box>
+                    )}
+                  </Paper>
+                </Grid>
+              );
+            })}
+          </Grid>
 
           <Typography variant="h6" sx={{ mb: 2, mt: 4 }}>
             Top Nodes by Coreness and Peripheriness
           </Typography>
           
           <Grid container spacing={3} sx={{ mb: 4 }}>
-            {/* Core Nodes Panel */}
             <Grid item xs={12} md={6}>
               <Paper 
                 sx={{ 
@@ -722,7 +769,6 @@ const MetricsTable = ({ metrics }) => {
               </Paper>
             </Grid>
             
-            {/* Periphery Nodes Panel */}
             <Grid item xs={12} md={6}>
               <Paper 
                 sx={{ 
@@ -850,7 +896,6 @@ const MetricsTable = ({ metrics }) => {
             </Grid>
           </Grid>
 
-          {/* Add Centrality Metrics Section if metrics include centrality data */}
           {hasAnyCentralityMetrics && (
             <Box sx={{ mb: 4 }}>
               <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold', display: 'flex', alignItems: 'center' }}>
@@ -900,7 +945,6 @@ const MetricsTable = ({ metrics }) => {
                         </Grid>
                       </Box>
                       
-                      {/* Only show comparison if either value is non-zero */}
                       {(metrics.network_metrics.centrality_metrics.avg_core_closeness > 0 || 
                         metrics.network_metrics.centrality_metrics.avg_periphery_closeness > 0) && (
                         <>
@@ -974,7 +1018,6 @@ const MetricsTable = ({ metrics }) => {
                         </Grid>
                       </Box>
                       
-                      {/* Only show comparison if either value is non-zero */}
                       {(metrics.network_metrics.centrality_metrics.avg_core_betweenness > 0 || 
                         metrics.network_metrics.centrality_metrics.avg_periphery_betweenness > 0) && (
                         <>

@@ -2,9 +2,6 @@ import React from 'react';
 import { Paper, Typography, Box, Tooltip } from '@mui/material';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 
-/**
- * A reusable card component for displaying graph metrics
- */
 const MetricCard = ({ title, value, description, unit = '', valueColor, icon: Icon }) => {
   return (
     <Paper 

@@ -42,7 +42,6 @@ const CorePeripheryMetrics = ({ graphData, metrics }) => {
         />
       </Grid>
       
-      {/* New metrics row */}
       <Grid item xs={12} sm={6} md={4}>
         <MetricCard 
           title="Core Density" 
@@ -71,14 +70,11 @@ const CorePeripheryMetrics = ({ graphData, metrics }) => {
   );
 };
 
-// Helper functions to get core and periphery counts with fallbacks
 const getCoreCount = (metrics, graphData) => {
-  // First check if metrics has core_stats.core_size
   if (metrics?.core_stats?.core_size !== undefined) {
     return metrics.core_stats.core_size;
   }
   
-  // Fallback to calculating from graphData if metrics not available
   if (graphData?.nodes) {
     return graphData.nodes.filter(node => 
       node.type === 'C' || node.isCore === true
@@ -89,12 +85,10 @@ const getCoreCount = (metrics, graphData) => {
 };
 
 const getPeripheryCount = (metrics, graphData) => {
-  // First check if metrics has core_stats.periphery_size
   if (metrics?.core_stats?.periphery_size !== undefined) {
     return metrics.core_stats.periphery_size;
   }
   
-  // Fallback to calculating from graphData if metrics not available
   if (graphData?.nodes) {
     return graphData.nodes.filter(node => 
       node.type === 'P' || (node.isCore !== undefined && !node.isCore)
@@ -104,14 +98,11 @@ const getPeripheryCount = (metrics, graphData) => {
   return 0;
 };
 
-// Get Core Percentage from metrics when available
 const getCorePercentage = (metrics, graphData) => {
-  // First check if metrics has core_stats.core_percentage
   if (metrics?.core_stats?.core_percentage !== undefined) {
     return `${metrics.core_stats.core_percentage.toFixed(1)}%`;
   }
   
-  // Fallback to calculating from graphData if metrics not available
   if (graphData?.nodes) {
     const totalNodes = graphData.nodes.length;
     const coreNodes = getCoreCount(metrics, graphData);
@@ -125,19 +116,15 @@ const getCorePercentage = (metrics, graphData) => {
   return '0.0%';
 };
 
-// Get Core Density from metrics when available
 const getCoreDensity = (metrics, graphData) => {
-  // First check if metrics has core_periphery_metrics.core_density
   if (metrics?.core_periphery_metrics?.core_density !== undefined) {
     const density = metrics.core_periphery_metrics.core_density;
-    // Format small values with 4 decimal places, larger values with 2
     if (density > 0 && density < 0.01) {
       return density.toFixed(4);
     }
     return density.toFixed(2);
   }
   
-  // Fallback to calculating from graphData if metrics not available
   if (graphData?.nodes && graphData?.edges) {
     const coreNodes = graphData.nodes.filter(node => 
       node.type === 'C' || node.isCore === true
@@ -155,7 +142,6 @@ const getCoreDensity = (metrics, graphData) => {
     });
     
     const calculatedDensity = coreEdges / possibleCoreEdges;
-    // Format small values with 4 decimal places, larger values with 2
     if (calculatedDensity > 0 && calculatedDensity < 0.01) {
       return calculatedDensity.toFixed(4);
     }
@@ -166,12 +152,10 @@ const getCoreDensity = (metrics, graphData) => {
 };
 
 const getCorePeriConnectivity = (metrics, graphData) => {
-  // First check if metrics has core_periphery_metrics.periphery_core_connectivity
   if (metrics?.core_periphery_metrics?.periphery_core_connectivity !== undefined) {
     return metrics.core_periphery_metrics.periphery_core_connectivity.toFixed(2);
   }
   
-  // Calculate from graphData if available (fallback)
   if (graphData?.nodes && graphData?.edges) {
     const peripheryNodes = graphData.nodes.filter(node => 
       node.type === 'P' || (node.isCore !== undefined && !node.isCore)
@@ -198,12 +182,10 @@ const getCorePeriConnectivity = (metrics, graphData) => {
 };
 
 const getPeripheryIsolation = (metrics, graphData) => {
-  // Check if metrics has core_periphery_metrics with periphery_isolation
   if (metrics?.core_periphery_metrics?.periphery_isolation !== undefined) {
     return metrics.core_periphery_metrics.periphery_isolation.toFixed(2) + '%';
   }
   
-  // Calculate from graphData if available (fallback)
   if (graphData?.nodes && graphData?.edges) {
     const peripheryNodes = graphData.nodes.filter(node => 
       node.type === 'P' || (node.isCore !== undefined && !node.isCore)

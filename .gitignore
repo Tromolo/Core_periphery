@@ -159,8 +159,7 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 .idea/
 
-*.png
-*.csv
+
 *.txt
 *.gml
 *.graphml
@@ -169,9 +168,6 @@ cython_debug/
 *.gdf
 
 /static/
-
-package-lock.json
-package.json
 
 node_modules/
 build/

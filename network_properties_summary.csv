@@ -1,0 +1,9 @@
+Network,Nodes (N),Edges (E),Density,Modularity,Num Communities
+Karate Club,34,78,0.139037,0.426622,4
+Dolphins,62,159,0.084082,0.518828,5
+Les Miserables,77,254,0.086808,0.558272,6
+Football,115,613,0.093516,0.604570,10
+Facebook Combined,4039,88234,0.010820,0.834881,16
+Power Grid,4941,6594,0.000540,0.936121,39
+Bianconi-0.7,10000,29991,0.000600,0.674028,55
+Bianconi-0.97,10000,29991,0.000600,0.899156,47
