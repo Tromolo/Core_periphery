@@ -17,7 +17,7 @@ Nasledujte tieto kroky na nastavenie a spustenie aplikácie na vašom lokálnom 
 
 1.  **Klonujte repozitár:**
     ```bash
-    git clone <URL_VÁŠHO_REPOZITÁRA> # Nahraďte URL adresou vášho GitHub repozitára
+    git clone https://github.com/Tromolo/Core_periphery.git
     cd Core_periphery # Alebo názov adresára, kam ste klonovali
     ```
 
