@@ -57,8 +57,8 @@ const AlgorithmSelector = ({ graphData, onAnalysis, onUpload }) => {
       icon: <Science />,
       params: {
         alpha: 0.5,
-        beta: 0.8,
-        num_runs: 10
+        beta: 0.9,
+        num_runs: 5
       }
     },
     be: {
@@ -71,12 +71,12 @@ const AlgorithmSelector = ({ graphData, onAnalysis, onUpload }) => {
       }
     },
     cucuringu: {
-      name: "Cucuringu Algorithm",
+      name: "LowRankCore Algorithm",
       description: "A spectral method for core-periphery detection using low-rank matrix approximation and eigendecomposition.",
       reference: "Cucuringu et al. (2016)",
       icon: <BarChart />,
       params: {
-        beta: 0.1
+        beta: 0.9
       }
     }
   };
@@ -130,8 +130,8 @@ const AlgorithmSelector = ({ graphData, onAnalysis, onUpload }) => {
         validationError = 'Number of runs must be at least 1';
       }
     } else if (selectedAlgorithm === 'cucuringu') {
-      if (beta < 0.01 || beta > 0.5) {
-        validationError = 'Beta must be between 0.01 and 0.5 for Cucuringu algorithm';
+      if (beta < 0.01 || beta > 1.0) {
+        validationError = 'Beta must be between 0.01 and 1.0 for LowRankCore algorithm';
       }
     }
     
