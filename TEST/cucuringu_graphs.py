@@ -28,7 +28,7 @@ plt.figure(figsize=(10, 8))
 ax = sns.heatmap(heatmap_data, annot=True, fmt='.1f', cmap='YlGnBu', 
                 linewidths=.5, cbar_kws={'label': 'Veľkosť jadra (%)'})
 
-plt.title('Veľkosť jadra (%) Cucuringu algoritmu v závislosti od beta', fontsize=14)
+plt.title('Veľkosť jadra (%) LowRankCore algoritmu v závislosti od beta', fontsize=14)
 plt.xlabel('Beta parameter', fontsize=12)
 plt.ylabel('Sieť', fontsize=12)
 plt.tight_layout()
@@ -42,7 +42,7 @@ heatmap_data_pm = cucuringu_summary.pivot(index='network', columns='beta', value
 ax = sns.heatmap(heatmap_data_pm, annot=True, fmt='.1f', cmap='RdYlGn', 
                 linewidths=.5, cbar_kws={'label': 'Pattern Match (%)'})
 
-plt.title('Pattern Match (%) Cucuringu algoritmu v závislosti od beta', fontsize=14)
+plt.title('Pattern Match (%) LowRankCore algoritmu v závislosti od beta', fontsize=14)
 plt.xlabel('Beta parameter', fontsize=12)
 plt.ylabel('Sieť', fontsize=12)
 plt.tight_layout()
@@ -56,7 +56,7 @@ heatmap_data_rt = cucuringu_summary.pivot(index='network', columns='beta', value
 ax = sns.heatmap(heatmap_data_rt, annot=True, fmt='.2f', cmap='Purples', 
                 linewidths=.5, cbar_kws={'label': 'Výpočtový čas (s)'})
 
-plt.title('Výpočtový čas (s) Cucuringu algoritmu v závislosti od beta', fontsize=14)
+plt.title('Výpočtový čas (s) LowRankCore algoritmu v závislosti od beta', fontsize=14)
 plt.xlabel('Beta parameter', fontsize=12)
 plt.ylabel('Sieť', fontsize=12)
 plt.tight_layout()

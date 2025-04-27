@@ -23,14 +23,15 @@ os.makedirs(output_dir, exist_ok=True)
 output_csv = os.path.join(output_dir, 'rombach_optimal_cores.csv')
 
 rombach_optimal_params = {
-    "Karate Club": {"alpha": 0.5, "beta": 0.7, "num_runs": 10},
-    "Dolphins": {"alpha": 0.5, "beta": 0.7, "num_runs": 10},
-    "Les Miserables": {"alpha": 0.5, "beta": 0.7, "num_runs": 10},
-    "Football": {"alpha": 0.5, "beta": 0.7, "num_runs": 10},
-    "Facebook Combined": {"alpha": 0.5, "beta": 0.7, "num_runs": 5},
-    "Power Grid": {"alpha": 0.7, "beta": 0.7, "num_runs": 10},
-    "Bianconi-0.7": {"alpha": 0.5, "beta": 0.7, "num_runs": 10},
-    "Bianconi-0.97": {"alpha": 0.5, "beta": 0.7, "num_runs": 10}
+    "Karate Club": {"alpha": 0.5, "beta": 0.9, "num_runs": 5},
+    "Dolphins": {"alpha": 0.5, "beta": 0.9, "num_runs": 5},
+    "Les Miserables": {"alpha": 0.5, "beta": 0.9, "num_runs": 5},
+    "Football": {"alpha": 0.5, "beta": 0.9, "num_runs": 5},
+    "Facebook Combined": {"alpha": 0.5, "beta": 0.9, "num_runs": 5},
+    "Power Grid": {"alpha": 0.5, "beta": 0.9, "num_runs": 5},
+    "Bianconi-0.7": {"alpha": 0.5, "beta": 0.9, "num_runs": 5},
+    "Bianconi-0.97": {"alpha": 0.5, "beta": 0.9, "num_runs": 5},
+    "YeastL": {"alpha": 0.5, "beta": 0.9, "num_runs": 5}
 }
 
 FIXED_SEED = 42 
@@ -104,6 +105,10 @@ def load_network(network_name):
             path = os.path.join(project_path, 'data/site_pro_modely/Bianconi-Triadic-Closure 0.97 3.csv')
             G = load_graph_from_path(path)
             print(f"  Sieť Bianconi-0.97 načítaná z {path}")
+        elif network_name == 'YeastL':
+            path = os.path.join(project_path, 'data/male_site/YeastL.csv')
+            G = load_graph_from_path(path)
+            print(f"  Sieť YeastL načítaná z {path}")
         else:
             raise ValueError(f"Neznáma sieť: {network_name}")
     except Exception as e:

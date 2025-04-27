@@ -7,6 +7,7 @@ import os
 import sys
 import random
 import traceback
+import seaborn as sns
 
 
 project_path = '/home/hruby/PycharmProjects/Core_periphery'
@@ -93,6 +94,15 @@ def load_network(network_name):
         except Exception as e:
             print(f"Chyba pri načítaní Bianconi-0.97 z {bianconi97_path}: {e}")
             raise ValueError(f"Nepodarilo sa načítať sieť Bianconi-0.97 z {bianconi97_path}")
+    
+    elif network_name == 'YeastL':
+        yeastl_path = os.path.join(project_path, 'data/male_site/YeastL.csv')
+        try:
+            G = load_graph_from_path(yeastl_path)
+            print(f"Sieť YeastL načítaná z {yeastl_path}")
+        except Exception as e:
+            print(f"Chyba pri načítaní YeastL z {yeastl_path}: {e}")
+            raise ValueError(f"Nepodarilo sa načítať sieť YeastL z {yeastl_path}")
     else:
         raise ValueError(f"Neznáma sieť: {network_name}")
 
@@ -101,6 +111,27 @@ def load_network(network_name):
          G = nx.Graph(G)
          
     return G
+
+def plot_stability_heatmap(df, x_col, y_col, value_col, title, filename, cmap='viridis', fmt='.1f'):
+    """Vytvorí heat map z údajov dataframe. Hodnota x_col je na x-osi, y_col na y-osi a value_col je hodnota."""
+    try:
+        # Vytvor pivot table pre heatmap
+        pivot_df = df.pivot_table(index=y_col, columns=x_col, values=value_col, aggfunc='mean')
+        
+        plt.figure(figsize=(10, 6))
+        ax = sns.heatmap(pivot_df, annot=True, fmt=fmt, cmap=cmap, linewidths=.5, cbar_kws={'label': value_col})
+        
+        plt.title(title, fontsize=14)
+        plt.tight_layout()
+        
+        # Uloženie obrázka
+        plt.savefig(filename, dpi=300, bbox_inches='tight')
+        print(f"Heatmap uložená do {filename}")
+        plt.close()
+        
+    except Exception as e:
+        print(f"Chyba pri vytváraní heatmap: {e}")
+        traceback.print_exc()
 
 def calculate_core_stats(G, communities):
     """Vypočíta základné štatistiky a Ideal Pattern Match pre danú klasifikáciu."""
@@ -165,21 +196,32 @@ def calculate_core_stats(G, communities):
     max_core_core = core_size * (core_size - 1) / 2 if core_size > 1 else 0
     max_core_periphery = core_size * periphery_size
     max_periphery_periphery = periphery_size * (periphery_size - 1) / 2 if periphery_size > 1 else 0
+    
+    # Calculate densities
+    core_density = obs_core_core / max_core_core if max_core_core > 0 else 0
+    periphery_density = obs_periphery_periphery / max_periphery_periphery if max_periphery_periphery > 0 else 0
+    core_periphery_ratio = core_density / periphery_density if periphery_density > 0 else float('inf')
 
+    # Výpočet Ideal Pattern Match
     correct_core_core = obs_core_core
     correct_core_periphery = obs_core_periphery
-    correct_periphery_periphery = max_periphery_periphery - obs_periphery_periphery
-
+    correct_periphery_periphery = max_periphery_periphery - obs_periphery_periphery 
+    
     total_correct = correct_core_core + correct_core_periphery + correct_periphery_periphery
     total_possible = max_core_core + max_core_periphery + max_periphery_periphery
-
+    
     ideal_pattern_match = (total_correct / total_possible * 100) if total_possible > 0 else 0
+
+    pattern_match = ideal_pattern_match
 
     return {
         'core_size': core_size,
         'periphery_size': periphery_size,
         'core_percentage': core_percentage,
-        'pattern_match': ideal_pattern_match
+        'pattern_match': pattern_match,
+        'core_density': core_density,
+        'periphery_density': periphery_density,
+        'core_periphery_ratio': core_periphery_ratio
     }
 
 def run_cucuringu_algorithm(G, network_name, beta, repetitions=1):
@@ -211,7 +253,10 @@ def run_cucuringu_algorithm(G, network_name, beta, repetitions=1):
                 'metrics.ideal_pattern_match': core_stats['pattern_match'],
                 'metrics.core_size': core_stats['core_size'],
                 'metrics.periphery_size': core_stats['periphery_size'],
-                'metrics.core_percentage': core_stats['core_percentage']
+                'metrics.core_percentage': core_stats['core_percentage'],
+                'metrics.core_density': core_stats['core_density'],
+                'metrics.periphery_density': core_stats['periphery_density'],
+                'metrics.core_periphery_ratio': core_stats['core_periphery_ratio']
             })
 
             print(f"Sieť: {network_name}, beta: {beta:.2f}, rep: {rep}, "
@@ -226,134 +271,298 @@ def run_cucuringu_algorithm(G, network_name, beta, repetitions=1):
     return results
 
 def main():
-    networks = [
-        # Malé siete
-        'Karate Club', 'Dolphins',
-        # Stredné siete
-        'Les Miserables', 'Football',
-        # Veľké siete
-        'Facebook Combined', 'Power Grid',
-        # Syntetické siete
-        'Bianconi-0.7', 'Bianconi-0.97'
+    # All networks
+    small_networks = [
+        'Karate Club', 'Dolphins', 'Les Miserables', 'Football'
     ]
-
-    beta_values = np.round(np.linspace(0.1, 0.9, 9), 2)
-
-    repetitions = 1
-
-    all_results = []
-
-    for network_name in networks:
+    
+    large_networks = [
+        'Facebook Combined', 'Power Grid', 'Bianconi-0.7', 'Bianconi-0.97', 'YeastL'
+    ]
+    
+    # Rôzne hodnoty beta pre malé a veľké siete
+    small_beta_values = np.round(np.linspace(0.1, 0.9, 9), 2) 
+    large_beta_values = np.round(np.linspace(0.1, 0.9, 9), 2)
+    
+    # Počet opakovaní
+    small_repetitions = 1
+    large_repetitions = 1
+    
+    csv_file = os.path.join(results_dir, 'cucuringu_stability_results.csv')
+    
+    # Najprv spracuj malé siete a prepíš pôvodný súbor
+    print("=== SPRACOVANIE MALÝCH SIETÍ ===")
+    small_results = []
+    total_small_runs = len(small_networks) * len(small_beta_values) * small_repetitions
+    current_run = 0
+    
+    for network_name in small_networks:
         try:
             G = load_network(network_name)
             print(f"Sieť {network_name} načítaná: {G.number_of_nodes()} uzlov, {G.number_of_edges()} hrán")
-
-            for beta in beta_values:
-                results = run_cucuringu_algorithm(G, network_name, beta, repetitions)
-                all_results.extend(results)
+            
+            for beta in small_beta_values:
+                print(f"Spúšťam Cucuringu algoritmus s beta={beta:.2f}, repetitions={small_repetitions} ...")
+                results = run_cucuringu_algorithm(G, network_name, beta, small_repetitions)
+                small_results.extend(results)
+                current_run += len(results)
+                print(f"Pokrok malých sietí: {current_run}/{total_small_runs} behov ({(current_run/total_small_runs)*100:.1f}%)")
+                
         except Exception as e:
             print(f"Chyba pri spracovaní siete {network_name}: {e}")
             traceback.print_exc()
-
-    if not all_results:
-        print("Žiadne výsledky neboli získané!")
-        return
-
-    results_df = pd.DataFrame(all_results)
-
-    csv_file = os.path.join(results_dir, 'cucuringu_stability_results.csv')
-    try:
+    
+    # Zapíš malé siete (prepíše súbor)
+    if small_results:
+        results_df = pd.DataFrame(small_results)
         results_df.to_csv(csv_file, index=False)
-        print(f"Výsledky boli uložené do súboru '{csv_file}'")
-    except Exception as e:
-        print(f"Chyba pri ukladaní CSV súboru '{csv_file}': {e}")
-
-
-    summary = results_df.groupby(['network', 'parameters.beta']).agg(
-        mean_pattern_match=('metrics.ideal_pattern_match', 'mean'),
-        std_pattern_match=('metrics.ideal_pattern_match', 'std'),
-        mean_core_percentage=('metrics.core_percentage', 'mean'),
-        std_core_percentage=('metrics.core_percentage', 'std'),
-        mean_runtime=('runtime', 'mean')
-    ).reset_index()
-
-    summary.fillna({'std_pattern_match': 0, 'std_core_percentage': 0}, inplace=True)
-
-    print("Súhrn výsledkov:")
-    print(summary)
-
-    colors = {'Karate Club': '#1f77b4', 'Dolphins': '#ff7f0e'}
-
-    plt.figure(figsize=(10, 6))
-    for network in networks:
-        network_data = summary[summary['network'] == network]
-        if not network_data.empty:
-            plt.errorbar(
-                network_data['parameters.beta'],
-                network_data['mean_pattern_match'],
-                yerr=network_data['std_pattern_match'],
-                fmt='o-', linewidth=2, markersize=8, capsize=5,
-                color=colors.get(network, '#000000'), label=network
+        print(f"Výsledky malých sietí boli uložené do súboru '{csv_file}'")
+    
+    # Potom spracuj veľké siete a appenduj k existujúcemu súboru
+    print("\n=== SPRACOVANIE VEĽKÝCH SIETÍ ===")
+    large_results = []
+    total_large_runs = len(large_networks) * len(large_beta_values) * large_repetitions
+    current_run = 0
+    
+    for network_name in large_networks:
+        try:
+            G = load_network(network_name)
+            print(f"Sieť {network_name} načítaná: {G.number_of_nodes()} uzlov, {G.number_of_edges()} hrán")
+            
+            for beta in large_beta_values:
+                print(f"Spúšťam Cucuringu algoritmus s beta={beta:.2f}, repetitions={large_repetitions} ...")
+                results = run_cucuringu_algorithm(G, network_name, beta, large_repetitions)
+                large_results.extend(results)
+                current_run += len(results)
+                print(f"Pokrok veľkých sietí: {current_run}/{total_large_runs} behov ({(current_run/total_large_runs)*100:.1f}%)")
+                
+                # Priebežne zapisuj výsledky veľkých sietí (pridaj ich k existujúcemu súboru)
+                if results:
+                    results_df = pd.DataFrame(results)
+                    results_df.to_csv(csv_file, mode='a', header=False, index=False)
+                    print(f"Výsledky pre {network_name} s beta={beta:.2f} boli pridané do súboru '{csv_file}'")
+                
+        except Exception as e:
+            print(f"Chyba pri spracovaní siete {network_name}: {e}")
+            traceback.print_exc()
+    
+    # Načítaj kompletné výsledky pre generovanie heatmáp
+    print("\n=== GENEROVANIE HEATMÁP A GRAFOV ===")
+    try:
+        complete_results_df = pd.read_csv(csv_file)
+        
+        # Generate plots for each network
+        all_networks = small_networks + large_networks
+        for network in all_networks:
+            network_df = complete_results_df[complete_results_df['network'] == network]
+            
+            if network_df.empty:
+                print(f"Žiadne dáta pre sieť {network}")
+                continue
+            
+            print(f"Vykresľujem grafy pre sieť {network}")
+            
+            # Pattern match stability by beta
+            plot_filename = os.path.join(results_dir, f'cucuringu_stability_{network.replace(" ", "_")}_pattern_match.png')
+            plot_stability_heatmap(
+                network_df, 
+                x_col='parameters.beta', 
+                y_col='repetition',
+                value_col='metrics.ideal_pattern_match',
+                title=f'{network}: Ideal Pattern Match (%) by beta',
+                filename=plot_filename,
+                cmap='viridis',
+                fmt='.1f'
             )
-            for _, row in network_data.iterrows():
-                 plt.text(
-                    row['parameters.beta'],
-                    row['mean_pattern_match'] + 2,
-                    f"{row['mean_pattern_match']:.1f}%\n±{row['std_pattern_match']:.1f}",
-                    ha='center', va='bottom', fontsize=9, color=colors.get(network, '#000000')
+            
+            # Core size stability by beta
+            plot_filename = os.path.join(results_dir, f'cucuringu_stability_{network.replace(" ", "_")}_core_percentage.png')
+            plot_stability_heatmap(
+                network_df, 
+                x_col='parameters.beta', 
+                y_col='repetition',
+                value_col='metrics.core_percentage',
+                title=f'{network}: Core Percentage (%) by beta',
+                filename=plot_filename,
+                cmap='plasma',
+                fmt='.1f'
+            )
+            
+            # Core density heatmap
+            plot_filename = os.path.join(results_dir, f'cucuringu_stability_{network.replace(" ", "_")}_core_density.png')
+            plot_stability_heatmap(
+                network_df, 
+                x_col='parameters.beta', 
+                y_col='repetition',
+                value_col='metrics.core_density',
+                title=f'{network}: Core Density by beta',
+                filename=plot_filename,
+                cmap='Reds',
+                fmt='.2f'
+            )
+            
+            # Periphery density heatmap
+            plot_filename = os.path.join(results_dir, f'cucuringu_stability_{network.replace(" ", "_")}_periphery_density.png')
+            plot_stability_heatmap(
+                network_df, 
+                x_col='parameters.beta', 
+                y_col='repetition',
+                value_col='metrics.periphery_density',
+                title=f'{network}: Periphery Density by beta',
+                filename=plot_filename,
+                cmap='Blues',
+                fmt='.2f'
+            )
+            
+            # Core-Periphery ratio heatmap
+            plot_filename = os.path.join(results_dir, f'cucuringu_stability_{network.replace(" ", "_")}_cp_ratio.png')
+            try:
+                plot_stability_heatmap(
+                    network_df, 
+                    x_col='parameters.beta', 
+                    y_col='repetition',
+                    value_col='metrics.core_periphery_ratio',
+                    title=f'{network}: Core-Periphery Ratio by beta',
+                    filename=plot_filename,
+                    cmap='RdBu_r',
+                    fmt='.1f'
+                )
+            except Exception as e:
+                print(f"Chyba pri vykresľovaní Core-Periphery ratio pre {network}: {e}")
+        
+        # Vytvor aj agregované grafy pre všetky siete
+        summary = complete_results_df.groupby(['network', 'parameters.beta']).agg(
+            mean_pattern_match=('metrics.ideal_pattern_match', 'mean'),
+            std_pattern_match=('metrics.ideal_pattern_match', 'std'),
+            mean_core_percentage=('metrics.core_percentage', 'mean'),
+            std_core_percentage=('metrics.core_percentage', 'std'),
+            mean_runtime=('runtime', 'mean'),
+            mean_core_density=('metrics.core_density', 'mean'),
+            mean_periphery_density=('metrics.periphery_density', 'mean'),
+            mean_core_periphery_ratio=('metrics.core_periphery_ratio', 'mean')
+        ).reset_index()
+
+        summary.fillna({
+            'std_pattern_match': 0, 
+            'std_core_percentage': 0,
+            'mean_core_periphery_ratio': 0
+        }, inplace=True)
+
+        # Farby pre jednotlivé siete
+        colors = {
+            'Karate Club': '#1f77b4',
+            'Dolphins': '#ff7f0e',
+            'Les Miserables': '#2ca02c',
+            'Football': '#d62728',
+            'Facebook Combined': '#9467bd',
+            'Power Grid': '#8c564b',
+            'Bianconi-0.7': '#e377c2',
+            'Bianconi-0.97': '#7f7f7f',
+            'YeastL': '#bcbd22'
+        }
+
+        # Graf pre Pattern Match
+        plt.figure(figsize=(10, 6))
+        for network in all_networks:
+            network_data = summary[summary['network'] == network]
+            if not network_data.empty:
+                plt.errorbar(
+                    network_data['parameters.beta'],
+                    network_data['mean_pattern_match'],
+                    yerr=network_data['std_pattern_match'],
+                    fmt='o-', linewidth=2, markersize=8, capsize=5,
+                    color=colors.get(network, '#000000'), label=network
                 )
 
-    plt.title('Vplyv parametra beta na kvalitu detekcie Cucuringu algoritmu', fontsize=14)
-    plt.xlabel('Parameter Beta', fontsize=12)
-    plt.ylabel('Pattern Match (%)', fontsize=12)
-    plt.legend(loc='best', fontsize=10)
-    plt.grid(True, linestyle='--', alpha=0.7)
-    plt.ylim(0, 105)
-    plt.xticks(beta_values)
-    plt.tight_layout()
-    plot_file_pm = os.path.join(results_dir, 'cucuringu_pattern_match.png')
-    try:
+        plt.title('Vplyv parametra beta na kvalitu detekcie Cucuringu algoritmu', fontsize=14)
+        plt.xlabel('Parameter Beta', fontsize=12)
+        plt.ylabel('Pattern Match (%)', fontsize=12)
+        plt.legend(loc='best', fontsize=10)
+        plt.grid(True, linestyle='--', alpha=0.7)
+        plt.ylim(0, 105)
+        plt.tight_layout()
+        plot_file_pm = os.path.join(results_dir, 'cucuringu_pattern_match.png')
         plt.savefig(plot_file_pm, dpi=300)
         print(f"Graf pattern match uložený do '{plot_file_pm}'")
-    except Exception as e:
-        print(f"Chyba pri ukladaní grafu '{plot_file_pm}': {e}")
-    plt.close()
+        plt.close()
 
-    plt.figure(figsize=(10, 6))
-    for network in networks:
-        network_data = summary[summary['network'] == network]
-        if not network_data.empty:
-            plt.errorbar(
-                network_data['parameters.beta'],
-                network_data['mean_core_percentage'],
-                yerr=network_data['std_core_percentage'],
-                fmt='s-', linewidth=2, markersize=8, capsize=5,
-                color=colors.get(network, '#000000'), label=network
-            )
-            for _, row in network_data.iterrows():
-                 plt.text(
-                    row['parameters.beta'],
-                    row['mean_core_percentage'] + 2,
-                    f"{row['mean_core_percentage']:.1f}%\n±{row['std_core_percentage']:.1f}",
-                    ha='center', va='bottom', fontsize=9, color=colors.get(network, '#000000')
+        # Graf pre Core Percentage
+        plt.figure(figsize=(10, 6))
+        for network in all_networks:
+            network_data = summary[summary['network'] == network]
+            if not network_data.empty:
+                plt.errorbar(
+                    network_data['parameters.beta'],
+                    network_data['mean_core_percentage'],
+                    yerr=network_data['std_core_percentage'],
+                    fmt='s-', linewidth=2, markersize=8, capsize=5,
+                    color=colors.get(network, '#000000'), label=network
                 )
 
-    plt.title('Vplyv parametra beta na veľkosť jadra Cucuringu algoritmu', fontsize=14)
-    plt.xlabel('Parameter Beta', fontsize=12)
-    plt.ylabel('Veľkosť jadra (%)', fontsize=12)
-    plt.legend(loc='best', fontsize=10)
-    plt.grid(True, linestyle='--', alpha=0.7)
-    plt.ylim(0, 105)
-    plt.xticks(beta_values)
-    plt.tight_layout()
-    plot_file_cs = os.path.join(results_dir, 'cucuringu_core_size.png')
-    try:
+        plt.title('Vplyv parametra beta na veľkosť jadra Cucuringu algoritmu', fontsize=14)
+        plt.xlabel('Parameter Beta', fontsize=12)
+        plt.ylabel('Veľkosť jadra (%)', fontsize=12)
+        plt.legend(loc='best', fontsize=10)
+        plt.grid(True, linestyle='--', alpha=0.7)
+        plt.ylim(0, 105)
+        plt.tight_layout()
+        plot_file_cs = os.path.join(results_dir, 'cucuringu_core_size.png')
         plt.savefig(plot_file_cs, dpi=300)
         print(f"Graf veľkosti jadra uložený do '{plot_file_cs}'")
-    except Exception as e:
-        print(f"Chyba pri ukladaní grafu '{plot_file_cs}': {e}")
-    plt.close()
+        plt.close()
+        
+        # Graf pre Core Density
+        plt.figure(figsize=(10, 6))
+        for network in all_networks:
+            network_data = summary[summary['network'] == network]
+            if not network_data.empty:
+                plt.plot(
+                    network_data['parameters.beta'],
+                    network_data['mean_core_density'],
+                    'o-', linewidth=2, markersize=8,
+                    color=colors.get(network, '#000000'), label=network
+                )
 
+        plt.title('Vplyv parametra beta na hustotu jadra Cucuringu algoritmu', fontsize=14)
+        plt.xlabel('Parameter Beta', fontsize=12)
+        plt.ylabel('Hustota jadra', fontsize=12)
+        plt.legend(loc='best', fontsize=10)
+        plt.grid(True, linestyle='--', alpha=0.7)
+        plt.ylim(0, 1.05)
+        plt.tight_layout()
+        plot_file_cd = os.path.join(results_dir, 'cucuringu_core_density.png')
+        plt.savefig(plot_file_cd, dpi=300)
+        print(f"Graf hustoty jadra uložený do '{plot_file_cd}'")
+        plt.close()
+        
+        # Graf pre Periphery Density
+        plt.figure(figsize=(10, 6))
+        for network in all_networks:
+            network_data = summary[summary['network'] == network]
+            if not network_data.empty:
+                plt.plot(
+                    network_data['parameters.beta'],
+                    network_data['mean_periphery_density'],
+                    's-', linewidth=2, markersize=8,
+                    color=colors.get(network, '#000000'), label=network
+                )
+
+        plt.title('Vplyv parametra beta na hustotu periférie Cucuringu algoritmu', fontsize=14)
+        plt.xlabel('Parameter Beta', fontsize=12)
+        plt.ylabel('Hustota periférie', fontsize=12)
+        plt.legend(loc='best', fontsize=10)
+        plt.grid(True, linestyle='--', alpha=0.7)
+        plt.ylim(0, 1.05)
+        plt.tight_layout()
+        plot_file_pd = os.path.join(results_dir, 'cucuringu_periphery_density.png')
+        plt.savefig(plot_file_pd, dpi=300)
+        print(f"Graf hustoty periférie uložený do '{plot_file_pd}'")
+        plt.close()
+    
+    except Exception as e:
+        print(f"Chyba pri generovaní heatmáp a grafov: {e}")
+        traceback.print_exc()
+    
     print(f"Analýza Cucuringu dokončená. Výsledky sú v adresári '{results_dir}'")
 
 if __name__ == "__main__":

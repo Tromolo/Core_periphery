@@ -24,7 +24,8 @@ output_csv = os.path.join(output_dir, 'cucuringu_optimal_cores.csv')
 
 network_list_for_cucu = [
     "Karate Club", "Dolphins", "Les Miserables", "Football",
-    "Facebook Combined", "Power Grid", "Bianconi-0.7", "Bianconi-0.97"
+    "Facebook Combined", "Power Grid", "Bianconi-0.7", "Bianconi-0.97",
+    "YeastL"
 ]
 cucuringu_optimal_params = {network: {"beta": 0.1} for network in network_list_for_cucu}
 
@@ -99,6 +100,10 @@ def load_network(network_name):
             path = os.path.join(project_path, 'data/site_pro_modely/Bianconi-Triadic-Closure 0.97 3.csv')
             G = load_graph_from_path(path)
             print(f"  Sieť Bianconi-0.97 načítaná z {path}")
+        elif network_name == 'YeastL':
+            path = os.path.join(project_path, 'data/male_site/YeastL.csv')
+            G = load_graph_from_path(path)
+            print(f"  Sieť YeastL načítaná z {path}")
         else:
             raise ValueError(f"Neznáma sieť: {network_name}")
     except Exception as e:

@@ -9,3 +9,6 @@ python-igraph
 cdlib
 numba
 scikit-learn
+simanneal
+matplotlib
+seaborn

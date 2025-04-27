@@ -26,7 +26,12 @@ be_optimal_params = {
     "Karate Club": {"num_runs": 20}, 
     "Dolphins": {"num_runs": 20},
     "Les Miserables": {"num_runs": 20}, 
-    "Football": {"num_runs": 20} 
+    "Football": {"num_runs": 10},
+    "Facebook Combined": {"num_runs": 1},
+    "Power Grid": {"num_runs": 1},
+    "Bianconi-0.7": {"num_runs": 1},
+    "Bianconi-0.97": {"num_runs": 1},
+    "YeastL": {"num_runs": 10}
 }
 
 FIXED_SEED = 42 
@@ -56,6 +61,27 @@ def load_network(network_name):
             path = os.path.join(project_path, 'data/male_site/football.gml')
             G = load_graph_from_path(path)
             print(f"  Sieť Football načítaná z {path}")
+            
+        elif network_name == 'Facebook Combined':
+            path = os.path.join(project_path, 'data/male_site/facebook_combined.csv') 
+            G = load_graph_from_path(path) 
+            print(f"  Sieť Facebook Combined načítaná z {path}")
+        elif network_name == 'Power Grid':
+            path = os.path.join(project_path, 'data/male_site/USpowergrid_n4941.csv') 
+            G = load_graph_from_path(path)
+            print(f"  Sieť Power Grid načítaná z {path}")
+        elif network_name == 'Bianconi-0.7':
+            path = os.path.join(project_path, 'data/site_pro_modely/Bianconi-Triadic-Closure 0.7 3.csv')
+            G = load_graph_from_path(path)
+            print(f"  Sieť Bianconi-0.7 načítaná z {path}")
+        elif network_name == 'Bianconi-0.97':
+            path = os.path.join(project_path, 'data/site_pro_modely/Bianconi-Triadic-Closure 0.97 3.csv')
+            G = load_graph_from_path(path)
+            print(f"  Sieť Bianconi-0.97 načítaná z {path}")
+        elif network_name == 'YeastL':
+            path = os.path.join(project_path, 'data/male_site/YeastL.csv')
+            G = load_graph_from_path(path)
+            print(f"  Sieť YeastL načítaná z {path}")            
         else:
             print(f"  Sieť {network_name} nie je relevantná pre túto BE analýzu.")
             return None

@@ -1,0 +1,181 @@
+Network Property,Algorithm,Algorithm Metric,Correlation (r)
+Nodes (N),BE,BE_runtime,0.927324
+Nodes (N),BE,BE_ideal_pattern_match,0.465339
+Nodes (N),BE,BE_core_percentage,-0.414347
+Nodes (N),BE,BE_core_density,-0.199998
+Nodes (N),BE,BE_periphery_density,-0.699060
+Nodes (N),BE,BE_core_periphery_ratio,0.090513
+Nodes (N),Rombach,Rombach_runtime,0.953405
+Nodes (N),Rombach,Rombach_ideal_pattern_match,0.535585
+Nodes (N),Rombach,Rombach_core_percentage,0.662769
+Nodes (N),Rombach,Rombach_core_density,-0.826504
+Nodes (N),Rombach,Rombach_periphery_density,-0.784497
+Nodes (N),Rombach,Rombach_core_periphery_ratio,0.074618
+Nodes (N),LowRankCore,LowRankCore_runtime,0.952774
+Nodes (N),LowRankCore,LowRankCore_ideal_pattern_match,0.481329
+Nodes (N),LowRankCore,LowRankCore_core_percentage,0.135556
+Nodes (N),LowRankCore,LowRankCore_core_density,-0.722905
+Nodes (N),LowRankCore,LowRankCore_periphery_density,-0.791419
+Nodes (N),LowRankCore,LowRankCore_core_periphery_ratio,0.154882
+Edges (E),BE,BE_runtime,0.269875
+Edges (E),BE,BE_ideal_pattern_match,0.462305
+Edges (E),BE,BE_core_percentage,-0.399504
+Edges (E),BE,BE_core_density,0.714503
+Edges (E),BE,BE_periphery_density,-0.440508
+Edges (E),BE,BE_core_periphery_ratio,0.860104
+Edges (E),Rombach,Rombach_runtime,0.455976
+Edges (E),Rombach,Rombach_ideal_pattern_match,0.367092
+Edges (E),Rombach,Rombach_core_percentage,0.475452
+Edges (E),Rombach,Rombach_core_density,-0.402934
+Edges (E),Rombach,Rombach_periphery_density,-0.525816
+Edges (E),Rombach,Rombach_core_periphery_ratio,0.633025
+Edges (E),LowRankCore,LowRankCore_runtime,0.573839
+Edges (E),LowRankCore,LowRankCore_ideal_pattern_match,0.332203
+Edges (E),LowRankCore,LowRankCore_core_percentage,0.082613
+Edges (E),LowRankCore,LowRankCore_core_density,-0.280618
+Edges (E),LowRankCore,LowRankCore_periphery_density,-0.527205
+Edges (E),LowRankCore,LowRankCore_core_periphery_ratio,0.905126
+Density,BE,BE_runtime,-0.534833
+Density,BE,BE_ideal_pattern_match,-0.510698
+Density,BE,BE_core_percentage,0.400270
+Density,BE,BE_core_density,-0.043517
+Density,BE,BE_periphery_density,0.957017
+Density,BE,BE_core_periphery_ratio,-0.513912
+Density,Rombach,Rombach_runtime,-0.625517
+Density,Rombach,Rombach_ideal_pattern_match,-0.559977
+Density,Rombach,Rombach_core_percentage,-0.918150
+Density,Rombach,Rombach_core_density,0.955620
+Density,Rombach,Rombach_periphery_density,0.975830
+Density,Rombach,Rombach_core_periphery_ratio,-0.527527
+Density,LowRankCore,LowRankCore_runtime,-0.658416
+Density,LowRankCore,LowRankCore_ideal_pattern_match,-0.367577
+Density,LowRankCore,LowRankCore_core_percentage,-0.466815
+Density,LowRankCore,LowRankCore_core_density,0.787161
+Density,LowRankCore,LowRankCore_periphery_density,0.959703
+Density,LowRankCore,LowRankCore_core_periphery_ratio,-0.365601
+Average Degree,BE,BE_runtime,-0.156931
+Average Degree,BE,BE_ideal_pattern_match,0.301966
+Average Degree,BE,BE_core_percentage,-0.247755
+Average Degree,BE,BE_core_density,0.903884
+Average Degree,BE,BE_periphery_density,-0.140852
+Average Degree,BE,BE_core_periphery_ratio,0.890501
+Average Degree,Rombach,Rombach_runtime,0.037158
+Average Degree,Rombach,Rombach_ideal_pattern_match,0.071580
+Average Degree,Rombach,Rombach_core_percentage,0.229725
+Average Degree,Rombach,Rombach_core_density,-0.052737
+Average Degree,Rombach,Rombach_periphery_density,-0.185398
+Average Degree,Rombach,Rombach_core_periphery_ratio,0.644847
+Average Degree,LowRankCore,LowRankCore_runtime,0.168507
+Average Degree,LowRankCore,LowRankCore_ideal_pattern_match,0.051599
+Average Degree,LowRankCore,LowRankCore_core_percentage,0.114182
+Average Degree,LowRankCore,LowRankCore_core_density,-0.004110
+Average Degree,LowRankCore,LowRankCore_periphery_density,-0.183275
+Average Degree,LowRankCore,LowRankCore_core_periphery_ratio,0.905652
+Assortativity,BE,BE_runtime,0.360731
+Assortativity,BE,BE_ideal_pattern_match,0.026021
+Assortativity,BE,BE_core_percentage,0.110239
+Assortativity,BE,BE_core_density,0.178625
+Assortativity,BE,BE_periphery_density,-0.599187
+Assortativity,BE,BE_core_periphery_ratio,0.527779
+Assortativity,Rombach,Rombach_runtime,0.425791
+Assortativity,Rombach,Rombach_ideal_pattern_match,-0.260205
+Assortativity,Rombach,Rombach_core_percentage,0.766272
+Assortativity,Rombach,Rombach_core_density,-0.518595
+Assortativity,Rombach,Rombach_periphery_density,-0.420734
+Assortativity,Rombach,Rombach_core_periphery_ratio,0.102884
+Assortativity,LowRankCore,LowRankCore_runtime,0.447083
+Assortativity,LowRankCore,LowRankCore_ideal_pattern_match,-0.448167
+Assortativity,LowRankCore,LowRankCore_core_percentage,0.733832
+Assortativity,LowRankCore,LowRankCore_core_density,-0.534280
+Assortativity,LowRankCore,LowRankCore_periphery_density,-0.373569
+Assortativity,LowRankCore,LowRankCore_core_periphery_ratio,0.154169
+Average Clustering Coefficient,BE,BE_runtime,0.228122
+Average Clustering Coefficient,BE,BE_ideal_pattern_match,0.147819
+Average Clustering Coefficient,BE,BE_core_percentage,-0.214600
+Average Clustering Coefficient,BE,BE_core_density,0.440167
+Average Clustering Coefficient,BE,BE_periphery_density,0.375812
+Average Clustering Coefficient,BE,BE_core_periphery_ratio,0.033232
+Average Clustering Coefficient,Rombach,Rombach_runtime,0.219773
+Average Clustering Coefficient,Rombach,Rombach_ideal_pattern_match,0.071321
+Average Clustering Coefficient,Rombach,Rombach_core_percentage,-0.425463
+Average Clustering Coefficient,Rombach,Rombach_core_density,0.352817
+Average Clustering Coefficient,Rombach,Rombach_periphery_density,0.243649
+Average Clustering Coefficient,Rombach,Rombach_core_periphery_ratio,-0.061093
+Average Clustering Coefficient,LowRankCore,LowRankCore_runtime,0.262851
+Average Clustering Coefficient,LowRankCore,LowRankCore_ideal_pattern_match,0.159051
+Average Clustering Coefficient,LowRankCore,LowRankCore_core_percentage,-0.205018
+Average Clustering Coefficient,LowRankCore,LowRankCore_core_density,0.316558
+Average Clustering Coefficient,LowRankCore,LowRankCore_periphery_density,0.207006
+Average Clustering Coefficient,LowRankCore,LowRankCore_core_periphery_ratio,0.380203
+Modularity,BE,BE_runtime,0.432097
+Modularity,BE,BE_ideal_pattern_match,0.599966
+Modularity,BE,BE_core_percentage,-0.482577
+Modularity,BE,BE_core_density,0.154765
+Modularity,BE,BE_periphery_density,-0.698878
+Modularity,BE,BE_core_periphery_ratio,0.535558
+Modularity,Rombach,Rombach_runtime,0.489150
+Modularity,Rombach,Rombach_ideal_pattern_match,0.398093
+Modularity,Rombach,Rombach_core_percentage,0.713797
+Modularity,Rombach,Rombach_core_density,-0.752456
+Modularity,Rombach,Rombach_periphery_density,-0.747978
+Modularity,Rombach,Rombach_core_periphery_ratio,0.235107
+Modularity,LowRankCore,LowRankCore_runtime,0.550433
+Modularity,LowRankCore,LowRankCore_ideal_pattern_match,0.293683
+Modularity,LowRankCore,LowRankCore_core_percentage,0.341644
+Modularity,LowRankCore,LowRankCore_core_density,-0.662964
+Modularity,LowRankCore,LowRankCore_periphery_density,-0.745582
+Modularity,LowRankCore,LowRankCore_core_periphery_ratio,0.358021
+Num Communities,BE,BE_runtime,0.248481
+Num Communities,BE,BE_ideal_pattern_match,0.359521
+Num Communities,BE,BE_core_percentage,-0.322416
+Num Communities,BE,BE_core_density,-0.335096
+Num Communities,BE,BE_periphery_density,-0.598483
+Num Communities,BE,BE_core_periphery_ratio,0.072714
+Num Communities,Rombach,Rombach_runtime,0.261444
+Num Communities,Rombach,Rombach_ideal_pattern_match,0.439055
+Num Communities,Rombach,Rombach_core_percentage,0.573595
+Num Communities,Rombach,Rombach_core_density,-0.715564
+Num Communities,Rombach,Rombach_periphery_density,-0.662551
+Num Communities,Rombach,Rombach_core_periphery_ratio,0.541007
+Num Communities,LowRankCore,LowRankCore_runtime,0.233992
+Num Communities,LowRankCore,LowRankCore_ideal_pattern_match,0.324606
+Num Communities,LowRankCore,LowRankCore_core_percentage,0.303195
+Num Communities,LowRankCore,LowRankCore_core_density,-0.667841
+Num Communities,LowRankCore,LowRankCore_periphery_density,-0.664738
+Num Communities,LowRankCore,LowRankCore_core_periphery_ratio,-0.046551
+Average Betweenness Centrality (Network),BE,BE_runtime,-0.483556
+Average Betweenness Centrality (Network),BE,BE_ideal_pattern_match,-0.657677
+Average Betweenness Centrality (Network),BE,BE_core_percentage,0.554028
+Average Betweenness Centrality (Network),BE,BE_core_density,-0.134851
+Average Betweenness Centrality (Network),BE,BE_periphery_density,0.776009
+Average Betweenness Centrality (Network),BE,BE_core_periphery_ratio,-0.558899
+Average Betweenness Centrality (Network),Rombach,Rombach_runtime,-0.575477
+Average Betweenness Centrality (Network),Rombach,Rombach_ideal_pattern_match,-0.401662
+Average Betweenness Centrality (Network),Rombach,Rombach_core_percentage,-0.810647
+Average Betweenness Centrality (Network),Rombach,Rombach_core_density,0.875616
+Average Betweenness Centrality (Network),Rombach,Rombach_periphery_density,0.845899
+Average Betweenness Centrality (Network),Rombach,Rombach_core_periphery_ratio,-0.497188
+Average Betweenness Centrality (Network),LowRankCore,LowRankCore_runtime,-0.611667
+Average Betweenness Centrality (Network),LowRankCore,LowRankCore_ideal_pattern_match,-0.222795
+Average Betweenness Centrality (Network),LowRankCore,LowRankCore_core_percentage,-0.658453
+Average Betweenness Centrality (Network),LowRankCore,LowRankCore_core_density,0.853833
+Average Betweenness Centrality (Network),LowRankCore,LowRankCore_periphery_density,0.849417
+Average Betweenness Centrality (Network),LowRankCore,LowRankCore_core_periphery_ratio,-0.328728
+Average Closeness Centrality (Network),BE,BE_runtime,-0.483986
+Average Closeness Centrality (Network),BE,BE_ideal_pattern_match,-0.412914
+Average Closeness Centrality (Network),BE,BE_core_percentage,0.311240
+Average Closeness Centrality (Network),BE,BE_core_density,0.258913
+Average Closeness Centrality (Network),BE,BE_periphery_density,0.869984
+Average Closeness Centrality (Network),BE,BE_core_periphery_ratio,-0.240306
+Average Closeness Centrality (Network),Rombach,Rombach_runtime,-0.520192
+Average Closeness Centrality (Network),Rombach,Rombach_ideal_pattern_match,-0.528147
+Average Closeness Centrality (Network),Rombach,Rombach_core_percentage,-0.820107
+Average Closeness Centrality (Network),Rombach,Rombach_core_density,0.905647
+Average Closeness Centrality (Network),Rombach,Rombach_periphery_density,0.875845
+Average Closeness Centrality (Network),Rombach,Rombach_core_periphery_ratio,-0.229775
+Average Closeness Centrality (Network),LowRankCore,LowRankCore_runtime,-0.525641
+Average Closeness Centrality (Network),LowRankCore,LowRankCore_ideal_pattern_match,-0.399415
+Average Closeness Centrality (Network),LowRankCore,LowRankCore_core_percentage,-0.243451
+Average Closeness Centrality (Network),LowRankCore,LowRankCore_core_density,0.736089
+Average Closeness Centrality (Network),LowRankCore,LowRankCore_periphery_density,0.859362
+Average Closeness Centrality (Network),LowRankCore,LowRankCore_core_periphery_ratio,-0.074616

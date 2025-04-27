@@ -6,6 +6,8 @@ import time
 import os
 import sys
 import random
+import traceback
+import seaborn as sns
 
 project_path = '/home/hruby/PycharmProjects/Core_periphery'
 if project_path not in sys.path:
@@ -13,7 +15,8 @@ if project_path not in sys.path:
 from backend.functions import get_algorithm_function
 from backend.functions import load_graph_from_path
 
-os.makedirs('/home/hruby/PycharmProjects/Core_periphery/TEST/results/stability_be', exist_ok=True)
+results_dir = os.path.join(project_path, 'TEST/results/stability_be')
+os.makedirs(results_dir, exist_ok=True)
 
 def load_network(network_name):
     """Načíta sieť podľa názvu."""
@@ -48,6 +51,51 @@ def load_network(network_name):
         except Exception as e:
             print(f"Chyba pri načítaní Football z {football_path}: {e}")
             raise ValueError(f"Nepodarilo sa načítať sieť Football z {football_path}")
+            
+    elif network_name == 'Facebook Combined':
+        facebook_path = os.path.join(project_path, 'data/male_site/facebook_combined.csv')
+        try:
+            G = load_graph_from_path(facebook_path)
+            print(f"Sieť Facebook Combined načítaná z {facebook_path}")
+        except Exception as e:
+            print(f"Chyba pri načítaní Facebook Combined z {facebook_path}: {e}")
+            raise ValueError(f"Nepodarilo sa načítať sieť Facebook Combined z {facebook_path}")
+            
+    elif network_name == 'Power Grid':
+        power_grid_path = os.path.join(project_path, 'data/male_site/USpowergrid_n4941.csv')
+        try:
+            G = load_graph_from_path(power_grid_path)
+            print(f"Sieť Power Grid načítaná z {power_grid_path}")
+        except Exception as e:
+            print(f"Chyba pri načítaní Power Grid z {power_grid_path}: {e}")
+            raise ValueError(f"Nepodarilo sa načítať sieť Power Grid z {power_grid_path}")
+            
+    elif network_name == 'Bianconi-0.7':
+        bianconi07_path = os.path.join(project_path, 'data/site_pro_modely/Bianconi-Triadic-Closure 0.7 3.csv')
+        try:
+            G = load_graph_from_path(bianconi07_path)
+            print(f"Sieť Bianconi-0.7 načítaná z {bianconi07_path}")
+        except Exception as e:
+            print(f"Chyba pri načítaní Bianconi-0.7 z {bianconi07_path}: {e}")
+            raise ValueError(f"Nepodarilo sa načítať sieť Bianconi-0.7 z {bianconi07_path}")
+            
+    elif network_name == 'Bianconi-0.97':
+        bianconi97_path = os.path.join(project_path, 'data/site_pro_modely/Bianconi-Triadic-Closure 0.97 3.csv')
+        try:
+            G = load_graph_from_path(bianconi97_path)
+            print(f"Sieť Bianconi-0.97 načítaná z {bianconi97_path}")
+        except Exception as e:
+            print(f"Chyba pri načítaní Bianconi-0.97 z {bianconi97_path}: {e}")
+            raise ValueError(f"Nepodarilo sa načítať sieť Bianconi-0.97 z {bianconi97_path}")
+    
+    elif network_name == 'YeastL':
+        yeastl_path = os.path.join(project_path, 'data/male_site/YeastL.csv')
+        try:
+            G = load_graph_from_path(yeastl_path)
+            print(f"Sieť YeastL načítaná z {yeastl_path}")
+        except Exception as e:
+            print(f"Chyba pri načítaní YeastL z {yeastl_path}: {e}")
+            raise ValueError(f"Nepodarilo sa načítať sieť YeastL z {yeastl_path}")
     
     return G
 
@@ -114,6 +162,11 @@ def calculate_core_stats(G, communities):
     max_core_periphery = core_size * periphery_size
     max_periphery_periphery = periphery_size * (periphery_size - 1) / 2 if periphery_size > 1 else 0
     
+    # Calculate densities
+    core_density = obs_core_core / max_core_core if max_core_core > 0 else 0
+    periphery_density = obs_periphery_periphery / max_periphery_periphery if max_periphery_periphery > 0 else 0
+    core_periphery_ratio = core_density / periphery_density if periphery_density > 0 else float('inf')
+    
     correct_core_core = obs_core_core
     correct_core_periphery = obs_core_periphery
     correct_periphery_periphery = max_periphery_periphery - obs_periphery_periphery 
@@ -123,14 +176,16 @@ def calculate_core_stats(G, communities):
     
     ideal_pattern_match = (total_correct / total_possible * 100) if total_possible > 0 else 0
 
-
     pattern_match = ideal_pattern_match 
     
     return {
         'core_size': core_size,
         'periphery_size': periphery_size,
         'core_percentage': core_percentage,
-        'pattern_match': pattern_match
+        'pattern_match': pattern_match,
+        'core_density': core_density,
+        'periphery_density': periphery_density,
+        'core_periphery_ratio': core_periphery_ratio
     }
 
 def run_be_algorithm(G, network_name, num_runs, repetitions=10):
@@ -161,7 +216,10 @@ def run_be_algorithm(G, network_name, num_runs, repetitions=10):
                 'metrics.ideal_pattern_match': core_stats['pattern_match'], 
                 'metrics.core_size': core_stats['core_size'],
                 'metrics.periphery_size': core_stats['periphery_size'],
-                'metrics.core_percentage': core_stats['core_percentage']
+                'metrics.core_percentage': core_stats['core_percentage'],
+                'metrics.core_density': core_stats['core_density'],
+                'metrics.periphery_density': core_stats['periphery_density'],
+                'metrics.core_periphery_ratio': core_stats['core_periphery_ratio']
             })
             
             print(f"Sieť: {network_name}, num_runs: {num_runs}, rep: {rep}, pattern_match: {core_stats['pattern_match']:.2f}%, core_size: {core_stats['core_size']}, core_percentage: {core_stats['core_percentage']:.2f}%")
@@ -174,121 +232,197 @@ def run_be_algorithm(G, network_name, num_runs, repetitions=10):
     
     return results
 
+def plot_stability_heatmap(df, x_col, y_col, value_col, title, filename, cmap='viridis', fmt='.1f'):
+    """Vykresľuje heatmapu stability."""
+    plt.figure(figsize=(10, 8))
+    
+    # Pivot dáta pre heatmapu
+    pivot_df = df.pivot_table(
+        index=y_col, 
+        columns=x_col,
+        values=value_col,
+        aggfunc='mean'
+    )
+    
+    # Vytvor heatmapu
+    ax = sns.heatmap(pivot_df, annot=True, cmap=cmap, fmt=fmt)
+    
+    plt.title(title, fontsize=14)
+    plt.tight_layout()
+    
+    try:
+        plt.savefig(filename, dpi=300)
+        print(f"Heatmapa uložená do '{filename}'")
+    except Exception as e:
+        print(f"Chyba pri ukladaní heatmapy '{filename}': {e}")
+    
+    plt.close()
+
 def main():
-    networks = [
-        'Karate Club', 'Dolphins',
-        'Les Miserables', 'Football'
+    # All networks
+    small_networks = [
+        'Karate Club', 'Dolphins', 'Les Miserables', 'Football'
     ]
     
-    num_runs_values = [5, 10, 20, 50]
+    large_networks = [
+        'Facebook Combined', 'Power Grid', 'Bianconi-0.7', 'Bianconi-0.97', 'YeastL'
+    ]
     
-    repetitions = 10
+    # Rôzne počty behov pre malé a veľké siete
+    small_num_runs_values = [5, 10,20, 50]  # Pre malé siete
+    large_num_runs_values = [5, 10]      # Pre veľké siete
     
-    all_results = []
+    # Use different repetition counts based on network size
+    small_repetitions = 10
+    large_repetitions = 1
     
-    for network_name in networks:
+    csv_file = os.path.join(results_dir, 'be_stability_results.csv')
+    
+    # Najprv spracuj malé siete a prepíš pôvodný súbor
+    print("=== SPRACOVANIE MALÝCH SIETÍ ===")
+    small_results = []
+    total_small_runs = len(small_networks) * len(small_num_runs_values) * small_repetitions
+    current_run = 0
+    
+    for network_name in small_networks:
         try:
             G = load_network(network_name)
             print(f"Sieť {network_name} načítaná: {G.number_of_nodes()} uzlov, {G.number_of_edges()} hrán")
             
-            for num_runs in num_runs_values:
-                results = run_be_algorithm(G, network_name, num_runs, repetitions)
-                all_results.extend(results)
+            for num_runs in small_num_runs_values:
+                print(f"Spúšťam BE algoritmus s num_runs={num_runs}, repetitions={small_repetitions} ...")
+                results = run_be_algorithm(G, network_name, num_runs, small_repetitions)
+                small_results.extend(results)
+                current_run += len(results)
+                print(f"Pokrok malých sietí: {current_run}/{total_small_runs} behov ({(current_run/total_small_runs)*100:.1f}%)")
+                
         except Exception as e:
             print(f"Chyba pri spracovaní siete {network_name}: {e}")
+            traceback.print_exc()
     
-    results_df = pd.DataFrame(all_results)
+    # Zapíš malé siete (prepíše súbor)
+    if small_results:
+        results_df = pd.DataFrame(small_results)
+        results_df.to_csv(csv_file, index=False)
+        print(f"Výsledky malých sietí boli uložené do súboru '{csv_file}'")
     
-    if len(results_df) == 0:
-        print("Žiadne výsledky neboli získané!")
-        return
+    # Potom spracuj veľké siete a appenduj k existujúcemu súboru
+    print("\n=== SPRACOVANIE VEĽKÝCH SIETÍ ===")
+    large_results = []
+    total_large_runs = len(large_networks) * len(large_num_runs_values) * large_repetitions
+    current_run = 0
     
-    csv_file = '/home/hruby/PycharmProjects/Core_periphery/TEST/results/stability_be/be_stability_results.csv'
-    results_df.to_csv(csv_file, index=False)
-    print(f"Výsledky boli uložené do súboru '{csv_file}'")
+    for network_name in large_networks:
+        try:
+            G = load_network(network_name)
+            print(f"Sieť {network_name} načítaná: {G.number_of_nodes()} uzlov, {G.number_of_edges()} hrán")
+            
+            for num_runs in large_num_runs_values:
+                print(f"Spúšťam BE algoritmus s num_runs={num_runs}, repetitions={large_repetitions} ...")
+                results = run_be_algorithm(G, network_name, num_runs, large_repetitions)
+                large_results.extend(results)
+                current_run += len(results)
+                print(f"Pokrok veľkých sietí: {current_run}/{total_large_runs} behov ({(current_run/total_large_runs)*100:.1f}%)")
+                
+                # Priebežne zapisuj výsledky veľkých sietí (pridaj ich k existujúcemu súboru)
+                if results:
+                    results_df = pd.DataFrame(results)
+                    results_df.to_csv(csv_file, mode='a', header=False, index=False)
+                    print(f"Výsledky pre {network_name} s num_runs={num_runs} boli pridané do súboru '{csv_file}'")
+                
+        except Exception as e:
+            print(f"Chyba pri spracovaní siete {network_name}: {e}")
+            traceback.print_exc()
     
-    summary = results_df.groupby(['network', 'parameters.num_runs']).agg({
-        'metrics.ideal_pattern_match': ['mean', 'std'],
-        'metrics.core_percentage': ['mean', 'std'],
-        'runtime': ['mean', 'std']
-    }).reset_index()
-    
-    print("\nSúhrn výsledkov:")
-    print(summary)
-    
-    plt.figure(figsize=(10, 6))
-    
-    colors = {'Karate Club': '#1f77b4', 'Dolphins': '#ff7f0e'}
-    
-    for network in networks:
-        network_data = summary[summary['network'] == network]
+    # Načítaj kompletné výsledky pre generovanie heatmáp
+    print("\n=== GENEROVANIE HEATMÁP ===")
+    try:
+        complete_results_df = pd.read_csv(csv_file)
         
-        if len(network_data) > 0:
-            plt.errorbar(
-                network_data['parameters.num_runs'], 
-                network_data[('metrics.ideal_pattern_match', 'mean')], 
-                yerr=network_data[('metrics.ideal_pattern_match', 'std')],
-                fmt='o-', linewidth=2, markersize=8, capsize=5, 
-                color=colors[network], label=f'{network}'
+        # Generate plots for each network
+        all_networks = small_networks + large_networks
+        for network in all_networks:
+            network_df = complete_results_df[complete_results_df['network'] == network]
+            
+            if network_df.empty:
+                print(f"Žiadne dáta pre sieť {network}")
+                continue
+            
+            print(f"Vykresľujem grafy pre sieť {network}")
+            
+            # Pattern match stability by num_runs
+            plot_filename = os.path.join(results_dir, f'be_stability_{network.replace(" ", "_")}_pattern_match.png')
+            plot_stability_heatmap(
+                network_df, 
+                x_col='parameters.num_runs', 
+                y_col='repetition',
+                value_col='metrics.ideal_pattern_match',
+                title=f'{network}: Ideal Pattern Match (%) by num_runs and repetitions',
+                filename=plot_filename,
+                cmap='viridis',
+                fmt='.1f'
             )
             
-            for i, row in network_data.iterrows():
-                plt.text(
-                    row['parameters.num_runs'], 
-                    row[('metrics.ideal_pattern_match', 'mean')] + 2, 
-                    f"{row[('metrics.ideal_pattern_match', 'mean')]:.1f}% ±{row[('metrics.ideal_pattern_match', 'std')]:.1f}",
-                    ha='center', fontsize=9, color=colors[network]
-                )
-    
-    plt.title('Vplyv parametra num_runs na kvalitu detekcie BE algoritmu', fontsize=14)
-    plt.xlabel('Počet opakovaní (num_runs)', fontsize=12)
-    plt.ylabel('Pattern Match (%)', fontsize=12)
-    
-    plt.legend(loc='best', fontsize=10)
-    
-    plt.grid(True, linestyle='--', alpha=0.7)
-    
-    plt.ylim(0, 100)  
-    
-    plt.tight_layout()
-    plt.savefig('/home/hruby/PycharmProjects/Core_periphery/TEST/results/stability_be/be_pattern_match.png', dpi=300)
-    plt.close()
-    
-    plt.figure(figsize=(10, 6))
-    
-    for network in networks:
-        network_data = summary[summary['network'] == network]
-        
-        if len(network_data) > 0:
-            plt.errorbar(
-                network_data['parameters.num_runs'], 
-                network_data[('metrics.core_percentage', 'mean')], 
-                yerr=network_data[('metrics.core_percentage', 'std')],
-                fmt='s-', linewidth=2, markersize=8, capsize=5, 
-                color=colors[network], label=f'{network}'
+            # Core size stability by num_runs
+            plot_filename = os.path.join(results_dir, f'be_stability_{network.replace(" ", "_")}_core_percentage.png')
+            plot_stability_heatmap(
+                network_df, 
+                x_col='parameters.num_runs', 
+                y_col='repetition',
+                value_col='metrics.core_percentage',
+                title=f'{network}: Core Percentage (%) by num_runs and repetitions',
+                filename=plot_filename,
+                cmap='plasma',
+                fmt='.1f'
             )
             
-            for i, row in network_data.iterrows():
-                plt.text(
-                    row['parameters.num_runs'], 
-                    row[('metrics.core_percentage', 'mean')] + 2, 
-                    f"{row[('metrics.core_percentage', 'mean')]:.1f}% ±{row[('metrics.core_percentage', 'std')]:.1f}",
-                    ha='center', fontsize=9, color=colors[network]
+            # Core density heatmap
+            plot_filename = os.path.join(results_dir, f'be_stability_{network.replace(" ", "_")}_core_density.png')
+            plot_stability_heatmap(
+                network_df, 
+                x_col='parameters.num_runs', 
+                y_col='repetition',
+                value_col='metrics.core_density',
+                title=f'{network}: Core Density by num_runs and repetitions',
+                filename=plot_filename,
+                cmap='Reds',
+                fmt='.2f'
+            )
+            
+            # Periphery density heatmap
+            plot_filename = os.path.join(results_dir, f'be_stability_{network.replace(" ", "_")}_periphery_density.png')
+            plot_stability_heatmap(
+                network_df, 
+                x_col='parameters.num_runs', 
+                y_col='repetition',
+                value_col='metrics.periphery_density',
+                title=f'{network}: Periphery Density by num_runs and repetitions',
+                filename=plot_filename,
+                cmap='Blues',
+                fmt='.2f'
+            )
+            
+            # Core-Periphery ratio heatmap
+            plot_filename = os.path.join(results_dir, f'be_stability_{network.replace(" ", "_")}_cp_ratio.png')
+            try:
+                plot_stability_heatmap(
+                    network_df, 
+                    x_col='parameters.num_runs', 
+                    y_col='repetition',
+                    value_col='metrics.core_periphery_ratio',
+                    title=f'{network}: Core-Periphery Ratio by num_runs and repetitions',
+                    filename=plot_filename,
+                    cmap='RdBu_r',
+                    fmt='.1f'
                 )
+            except Exception as e:
+                print(f"Chyba pri vykresľovaní Core-Periphery ratio pre {network}: {e}")
     
-    plt.title('Vplyv parametra num_runs na veľkosť jadra BE algoritmu', fontsize=14)
-    plt.xlabel('Počet opakovaní (num_runs)', fontsize=12)
-    plt.ylabel('Veľkosť jadra (%)', fontsize=12)
+    except Exception as e:
+        print(f"Chyba pri generovaní heatmáp: {e}")
+        traceback.print_exc()
     
-    plt.legend(loc='best', fontsize=10)
-    
-    plt.grid(True, linestyle='--', alpha=0.7)
-    
-    plt.tight_layout()
-    plt.savefig('/home/hruby/PycharmProjects/Core_periphery/TEST/results/stability_be/be_core_size.png', dpi=300)
-    plt.close()
-    
-    print("Grafy boli uložené do adresára '/home/hruby/PycharmProjects/Core_periphery/TEST/results/stability_be/'")
+    print(f"Analýza BE dokončená. Výsledky sú v adresári '{results_dir}'")
 
 if __name__ == "__main__":
     main()
