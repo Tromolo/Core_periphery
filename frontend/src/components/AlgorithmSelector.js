@@ -38,6 +38,7 @@ import {
   Timeline,
   Assessment
 } from '@mui/icons-material';
+const backendUrl = process.env.REACT_APP_BACKEND_URL || import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080';
 
 const AlgorithmSelector = ({ graphData, onAnalysis, onUpload }) => {
   const [file, setFile] = useState(null);
@@ -167,7 +168,7 @@ const AlgorithmSelector = ({ graphData, onAnalysis, onUpload }) => {
         ...(selectedAlgorithm === 'cucuringu' ? { beta } : {})
       });
 
-      const response = await fetch('http://localhost:8080/analyze', {
+      const response = await fetch(`${backendUrl}/analyze`, {
         method: 'POST',
         body: formData,
       });
