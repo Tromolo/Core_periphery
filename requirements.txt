@@ -13,3 +13,4 @@ simanneal
 matplotlib
 seaborn
 cpnet
+python-multipart
