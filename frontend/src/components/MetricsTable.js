@@ -38,7 +38,6 @@ const MetricsTable = ({ metrics }) => {
       'beta': 'Beta (β)',
       'num_runs': 'Number of Runs',
       'threshold': 'Core Classification Threshold',
-      'final_score': 'Quality Score (Q)',
       'execution_time': 'Execution Time (s)',
       'runs_completed': 'Completed Runs',
       'early_stops': 'Early Stops',
@@ -73,7 +72,6 @@ const MetricsTable = ({ metrics }) => {
         : 'Controls network partitioning parameters.',
       'num_runs': 'Number of independent algorithm runs with different initializations. Higher values improve result consistency.',
       'threshold': 'Threshold for classifying nodes as core or periphery. Nodes with coreness above this value are classified as core.',
-      'final_score': 'Quality score measuring how well the detected structure matches an ideal core-periphery pattern. Higher values indicate better match.',
       'runs_planned': 'The total number of algorithm runs that were planned.',
       'runs_completed': 'The actual number of algorithm runs that were completed.',
       'early_stops': 'The number of times the algorithm stopped early due to convergence.',
@@ -290,24 +288,6 @@ const MetricsTable = ({ metrics }) => {
   const displayParams = getDisplayParameters(params);
   const algorithmName = getAlgorithmName(metrics);
   
-  let qualityScore;
-  
-  if (metrics.algorithm_stats?.final_score !== undefined) {
-    qualityScore = metrics.algorithm_stats.final_score;
-  } 
-  else if (metrics.network_metrics?.rombach_params?.Q !== undefined) {
-    qualityScore = metrics.network_metrics.rombach_params.Q;
-  }
-  else if (metrics.network_metrics?.cucuringu_params?.Q !== undefined) {
-    qualityScore = metrics.network_metrics.cucuringu_params.Q;
-  }
-  else if (metrics.network_metrics?.be_params?.Q !== undefined) {
-    qualityScore = metrics.network_metrics.be_params.Q;
-  }
-  else if (params.final_score !== undefined) {
-    qualityScore = params.final_score;
-  }
-
   const hasCloseness = metrics.top_nodes.top_core_nodes.length > 0 && 
     metrics.top_nodes.top_core_nodes[0].hasOwnProperty('closeness') && 
     metrics.top_nodes.top_core_nodes[0].closeness > 0;
@@ -520,6 +500,8 @@ const MetricsTable = ({ metrics }) => {
               
               if (key === 'Q') return null;
               
+              if (key === 'final_score') return null;
+              
               let icon;
               let color;
               let bgColor;
@@ -550,12 +532,8 @@ const MetricsTable = ({ metrics }) => {
                 color = '#ff9800';
                 bgColor = 'rgba(255, 152, 0, 0.08)';
                 borderColor = 'rgba(255, 152, 0, 0.2)';
-              } else if (key === 'final_score') {
-                icon = <StarIcon sx={{ fontSize: 24 }} />;
-                color = getQualityColor(value);
-                bgColor = `${getQualityColor(value)}10`;
-                borderColor = `${getQualityColor(value)}20`;
-              } else if (key === 'threshold') {
+              } 
+                else if (key === 'threshold') {
                 icon = <BarChart sx={{ fontSize: 24 }} />;
                 color = '#673ab7';
                 bgColor = 'rgba(103, 58, 183, 0.08)';

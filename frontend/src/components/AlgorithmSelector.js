@@ -57,7 +57,7 @@ const AlgorithmSelector = ({ graphData, onAnalysis, onUpload }) => {
       icon: <Science />,
       params: {
         alpha: 0.5,
-        beta: 0.1,
+        beta: 0.9,
         num_runs: 5
       }
     },
@@ -76,7 +76,7 @@ const AlgorithmSelector = ({ graphData, onAnalysis, onUpload }) => {
       reference: "Cucuringu et al. (2016)",
       icon: <BarChart />,
       params: {
-        beta: 0.9
+        beta: 0.1
       }
     }
   };
@@ -130,8 +130,8 @@ const AlgorithmSelector = ({ graphData, onAnalysis, onUpload }) => {
         validationError = 'Number of runs must be at least 1';
       }
     } else if (selectedAlgorithm === 'cucuringu') {
-      if (beta < 0.01 || beta > 1.0) {
-        validationError = 'Beta must be between 0.01 and 1.0 for LowRankCore algorithm';
+      if (beta < 0.1 || beta > 1.0) {
+        validationError = 'Beta must be between 0.1 and 1.0 for LowRankCore algorithm';
       }
     }
     
@@ -687,13 +687,13 @@ const AlgorithmSelector = ({ graphData, onAnalysis, onUpload }) => {
                       <Slider
                         value={beta}
                         onChange={(e, newValue) => setBeta(newValue)}
-                        min={0.01}
-                        max={0.5}
-                        step={0.01}
+                        min={0.1}
+                        max={1.0}
+                        step={0.1}
                         marks={[
-                          { value: 0.01, label: '0.01' },
                           { value: 0.1, label: '0.1' },
-                          { value: 0.5, label: '0.5' }
+                          { value: 0.5, label: '0.5' },
+                          { value: 1.0, label: '1.0' }
                         ]}
                         sx={{
                           color: '#9c27b0',
