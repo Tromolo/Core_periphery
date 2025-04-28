@@ -57,7 +57,7 @@ const AlgorithmSelector = ({ graphData, onAnalysis, onUpload }) => {
       icon: <Science />,
       params: {
         alpha: 0.5,
-        beta: 0.9,
+        beta: 0.1,
         num_runs: 5
       }
     },
@@ -718,7 +718,7 @@ const AlgorithmSelector = ({ graphData, onAnalysis, onUpload }) => {
                       type="number"
                       value={beta}
                       onChange={(e) => setBeta(parseFloat(e.target.value))}
-                      inputProps={{ min: 0.01, max: 0.5, step: 0.01 }}
+                      inputProps={{ min: 0.1, max: 1.0, step: 0.1 }}
                       variant="outlined"
                       size="small"
                       fullWidth
