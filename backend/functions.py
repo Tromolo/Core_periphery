@@ -46,6 +46,8 @@ def load_graph_from_path(path: str, filename: str = None) -> nx.Graph:
     if filename is None:
         filename = os.path.basename(path)
     ext = filename.split(".")[-1].lower()
+    G = None
+    edge_attrs = []
 
     try:
         if ext == "gml":
@@ -77,7 +79,7 @@ def load_graph_from_path(path: str, filename: str = None) -> nx.Graph:
                             else:
                                 raise ValueError(f"Failed to load GML file: {str(gml_error)}")
 
-                print(f"Successfully loaded GML file using alternative method: {path}")
+                    print(f"Successfully loaded GML file using alternative method: {path}")
 
         elif ext == "graphml":
             G = nx.read_graphml(path)
@@ -119,44 +121,66 @@ def load_graph_from_path(path: str, filename: str = None) -> nx.Graph:
                 sep = best_separator[0]
                 print(f"Detected separator: '{sep}' with {best_separator[1]} occurrences in sample.")
 
+            df = None
+            df_read_with_header = None
 
             try:
-                df = pd.read_csv(path, sep=sep, encoding='utf-8', engine='python', low_memory=False)
+                print("Attempting to read CSV/text file with header=0.")
+                df_read_with_header = pd.read_csv(path, sep=sep, encoding='utf-8', engine='python')
 
-                header_is_likely_data = all(isinstance(col, (int, float)) or (isinstance(col, str) and col.replace('.', '', 1).isdigit()) for col in df.columns)
+                header_is_likely_data = all(isinstance(col, (int, float)) or (isinstance(col, str) and col.replace('.', '', 1).isdigit()) for col in df_read_with_header.columns)
 
                 if header_is_likely_data:
-                    print("Header seems to be data, re-reading with header=None.")
-                    df = pd.read_csv(path, sep=sep, header=None, encoding='utf-8', engine='python', low_memory=False)
-                    df = infer_edge_list_columns(df)
+                    print("Header row looks like data. Will proceed to try header=None.")
+                elif "source" in df_read_with_header.columns and "target" in df_read_with_header.columns:
+                    print("Header seems valid and contains 'source'/'target'.")
+                    df = df_read_with_header
                 else:
-                     if "source" not in df.columns or "target" not in df.columns:
-                         print("Inferring source/target columns from existing header.")
-                         df = infer_edge_list_columns(df.copy())
-
-
-            except Exception as e:
-                print(f"Error reading CSV with detected separator '{sep}': {e}. Trying without header.")
-                try:
-                    df = pd.read_csv(path, sep=sep, header=None, encoding='utf-8', engine='python', low_memory=False)
-                    df = infer_edge_list_columns(df)
-                except Exception as e2:
-                    print(f"Error reading CSV without header: {e2}. Trying default pandas separator detection.")
+                    print("Header seems real but lacks 'source'/'target'. Attempting column inference.")
                     try:
-                        df = pd.read_csv(
-                            path,
-                            sep=None,
-                            header=None,
-                            engine='python',
-                            encoding='utf-8',
-                            skipinitialspace=True,
-                            on_bad_lines='warn'
-                        )
-                        if df.shape[1] < 2:
-                             raise ValueError("Auto-detected less than 2 columns.")
-                        df = infer_edge_list_columns(df)
-                    except Exception as e3:
-                         raise ValueError(f"Failed to load CSV/text file {filename} with multiple methods: {e3}") from e3
+                        df = infer_edge_list_columns(df_read_with_header.copy())
+                        print("Successfully inferred columns from existing header.")
+                    except ValueError:
+                         print("Column inference failed. Will proceed to try header=None.")
+
+            except Exception as e_with_header:
+                print(f"Reading with header=0 failed: {e_with_header}. Trying with header=None.")
+
+            if df is None:
+                try:
+                    print("Attempting to read CSV/text file with header=None.")
+                    df_no_header = pd.read_csv(path, sep=sep, header=None, encoding='utf-8', engine='python')
+                    df = infer_edge_list_columns(df_no_header)
+                    print("Successfully read with header=None and inferred columns.")
+
+                except Exception as e_no_header:
+                    print(f"Reading with header=None also failed: {e_no_header}.")
+                    if df_read_with_header is not None and ("source" in df_read_with_header.columns or "target" in df_read_with_header.columns):
+                         print("Falling back to the result from header=0 attempt despite potential issues.")
+                         df = df_read_with_header
+                    else:
+                         print("Trying default pandas separator detection without header.")
+                         try:
+                             df = pd.read_csv(
+                                 path,
+                                 sep=None,
+                                 header=None,
+                                 engine='python',
+                                 encoding='utf-8',
+                                 skipinitialspace=True,
+                                 on_bad_lines='warn'
+                             )
+                             if df.shape[1] < 2:
+                                 raise ValueError("Auto-detected less than 2 columns.")
+                             df = infer_edge_list_columns(df)
+                             print("Successfully read using auto-detection.")
+                         except Exception as e3:
+                             print(f"Auto-detection failed: {e3}")
+                             original_error = e_with_header if isinstance(e_with_header, Exception) else e_no_header
+                             raise ValueError(f"Failed to load CSV/text file {filename} with multiple methods. Last error: {e3}") from original_error
+
+            if df is None:
+                 raise ValueError(f"Could not successfully parse the CSV/text file {filename} after multiple attempts.")
 
             if df.shape[1] < 2:
                 raise ValueError(f"Invalid edge list format in {filename}: {df.shape[1]} columns found after processing.")
@@ -167,9 +191,10 @@ def load_graph_from_path(path: str, filename: str = None) -> nx.Graph:
                      df = infer_edge_list_columns(df.copy())
                  except ValueError as infer_error:
                       raise ValueError(f"Could not determine source/target columns in {filename}") from infer_error
+                 if "source" not in df.columns or "target" not in df.columns:
+                     raise ValueError(f"Column inference failed to produce 'source' and 'target' columns in {filename}")
 
-
-            df.columns = [col.strip() if isinstance(col, str) else col for col in df.columns]
+            df.columns = [str(col).strip() if isinstance(col, (str, int, float)) else col for col in df.columns]
 
             df = df.dropna(subset=["source", "target"])
 
@@ -177,6 +202,13 @@ def load_graph_from_path(path: str, filename: str = None) -> nx.Graph:
             df["target"] = df["target"].astype(str)
 
             edge_attrs = list(df.columns.difference(["source", "target"]))
+
+            if 'weight' in edge_attrs:
+                try:
+                    df['weight'] = pd.to_numeric(df['weight'])
+                    print("Successfully converted 'weight' column to numeric.")
+                except ValueError as ve:
+                    print(f"Warning: Could not convert 'weight' column to numeric: {ve}. Keeping as object/string.")
 
             G = nx.from_pandas_edgelist(
                 df,
@@ -189,10 +221,27 @@ def load_graph_from_path(path: str, filename: str = None) -> nx.Graph:
             raise ValueError(f"Unsupported file type: {ext}")
 
         print(f"Successfully loaded graph from {path}. Nodes: {G.number_of_nodes()}, Edges: {G.number_of_edges()}")
+        if 'weight' in edge_attrs:
+            weights = nx.get_edge_attributes(G, 'weight')
+            if weights:
+                print(f"Loaded {len(weights)} edges with 'weight' attribute from CSV/text file.")
+            else:
+                print("Warning: 'weight' column was present in CSV/text file but no numeric weights were loaded onto edges.")
+        elif G is not None:
+             edge_weights = nx.get_edge_attributes(G, 'weight')
+             if edge_weights:
+                 print(f"Detected {len(edge_weights)} edges with 'weight' attribute in the loaded graph ({ext} format).")
+
         return G
 
     except Exception as e:
-        print(f"Error loading graph from path '{path}': {str(e)}")
+        if G is None and ext != "csv":
+             print(f"Error loading graph from path '{path}' ({ext}): {str(e)}")
+        elif G is not None:
+             print(f"Error after partially loading graph from path '{path}' ({ext}): {str(e)}")
+        else:
+             print(f"Error processing file '{filename}' ({ext}): {str(e)}")
+
         raise ValueError(f"Error processing file {filename}: {str(e)}") from e
 
 async def load_graph_file(file: UploadFile) -> nx.Graph:
